@@ -1,0 +1,1985 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kreditrechner – Raiffeisen Bauspardarlehen v3.5.1</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
+  <!-- Offline-Betrieb: chart.umd.min.js lokal speichern, src="./chart.umd.min.js" setzen -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" onerror="document.body.insertAdjacentHTML('afterbegin','<div id=\"chartWarn\" style=\"position:fixed;top:0;left:0;right:0;background:#964219;color:#fff;padding:.5rem 1rem;font-size:.85rem;z-index:9999;text-align:center\">&#9888; Chart.js nicht geladen (kein Internet). Charts nicht verfügbar. Für Offline: chart.umd.min.js lokal einbinden.</div>')"></script>
+  <style>
+    :root,[data-theme="light"]{
+      --text-xs:clamp(.75rem,.7rem + .25vw,.875rem);--text-sm:clamp(.875rem,.8rem + .35vw,1rem);
+      --text-base:clamp(1rem,.95rem + .25vw,1.125rem);--text-lg:clamp(1.125rem,1rem + .75vw,1.5rem);
+      --text-xl:clamp(1.5rem,1.2rem + 1.25vw,2.25rem);
+      --space-2:.5rem;--space-3:.75rem;--space-4:1rem;--space-5:1.25rem;--space-6:1.5rem;--space-8:2rem;
+      --color-bg:#f7f6f2;--color-surface:#f9f8f5;--color-surface-2:#fbfbf9;--color-surface-offset:#f3f0ec;
+      --color-border:#d4d1ca;--color-divider:#dcd9d5;
+      --color-text:#28251d;--color-text-muted:#6e6b65;--color-text-faint:#9b9891;--color-text-inverse:#f9f8f4;
+      --color-primary:#01696f;--color-primary-hover:#0c4e54;--color-primary-highlight:#cedcd8;
+      --color-success:#437a22;--color-warning:#964219;
+      --radius-md:.5rem;--radius-lg:.875rem;--radius-xl:1rem;
+      --shadow-sm:0 1px 2px rgba(24,20,13,.06);--shadow-md:0 4px 12px rgba(24,20,13,.08);--shadow-lg:0 12px 32px rgba(24,20,13,.12);
+      --font-body:'Satoshi',Inter,sans-serif;
+    }
+    [data-theme="dark"]{
+      --color-bg:#171614;--color-surface:#1c1b19;--color-surface-2:#201f1d;--color-surface-offset:#23211f;
+      --color-border:#393836;--color-divider:#2b2a28;
+      --color-text:#e2dfda;--color-text-muted:#a9a59f;--color-text-faint:#7e7b76;--color-text-inverse:#191816;
+      --color-primary:#4f98a3;--color-primary-hover:#227f8b;--color-primary-highlight:#313b3b;
+      --color-success:#78b554;--color-warning:#d18458;
+      --shadow-sm:0 1px 2px rgba(0,0,0,.2);--shadow-md:0 4px 12px rgba(0,0,0,.3);--shadow-lg:0 12px 32px rgba(0,0,0,.4);
+    }
+    *,:before,:after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;overflow:hidden}
+    body{font-family:var(--font-body);font-size:var(--text-base);background:var(--color-bg);color:var(--color-text);line-height:1.5}
+    button,input,select,textarea{font:inherit;color:inherit}
+    button{cursor:pointer;border:none;background:none}
+    a{color:inherit;text-decoration:none}
+    .dashboard{display:grid;grid-template-columns:280px 1fr;grid-template-rows:72px 1fr;height:100dvh}
+    .sidebar{grid-row:1/-1;background:var(--color-surface);border-right:1px solid rgba(40,37,29,.12);overflow-y:auto;padding:var(--space-6)}
+    .header{grid-column:2;display:flex;align-items:center;justify-content:space-between;padding:0 var(--space-6);border-bottom:1px solid rgba(40,37,29,.12);background:color-mix(in srgb,var(--color-surface) 92%,transparent);backdrop-filter:blur(12px);position:sticky;top:0;z-index:10}
+    .main{grid-column:2;overflow-y:auto;padding:var(--space-6)}
+    .brand{display:flex;gap:var(--space-3);align-items:center;margin-bottom:var(--space-8)}
+    .logo{width:38px;height:38px;border-radius:10px;background:var(--color-primary-highlight);display:grid;place-items:center;color:var(--color-primary);flex-shrink:0}
+    .logo svg{width:22px;height:22px}
+    .brand h1{font-size:var(--text-lg);font-weight:800;line-height:1.1}
+    .brand p{font-size:var(--text-xs);color:var(--color-text-muted);max-width:18ch}
+    .nav{display:grid;gap:var(--space-2)}
+    .nav button{display:flex;align-items:center;gap:var(--space-3);padding:.8rem .9rem;border-radius:var(--radius-md);font-size:var(--text-sm);font-weight:600;text-align:left;min-height:44px;width:100%}
+    .nav button.active,.nav button:hover{background:var(--color-surface-offset)}
+    .nav button svg{width:18px;height:18px;flex-shrink:0;opacity:.7}
+    .nav button.active svg{opacity:1;color:var(--color-primary)}
+    .header-title h2{font-size:var(--text-xl);font-weight:800}
+    .header-title p{font-size:var(--text-sm);color:var(--color-text-muted)}
+    .header-actions{display:flex;gap:var(--space-3);align-items:center}
+    .btn{min-height:44px;padding:.75rem 1rem;border-radius:var(--radius-md);font-size:var(--text-sm);font-weight:700;border:1px solid rgba(40,37,29,.12);background:var(--color-surface);display:inline-flex;align-items:center;gap:.4rem}
+    .btn.primary{background:var(--color-primary);color:var(--color-text-inverse);border-color:transparent}
+    .btn.primary:hover{background:var(--color-primary-hover)}
+    .btn.danger-btn{background:#b23a57;color:#fff;border-color:transparent}
+    .btn svg{width:16px;height:16px}
+    .icon-btn{width:44px;height:44px;border-radius:var(--radius-md);border:1px solid rgba(40,37,29,.12);display:grid;place-items:center;background:var(--color-surface)}
+    .stack{display:grid;gap:var(--space-6)}
+    .hero{display:grid;grid-template-columns:1.4fr .9fr;gap:var(--space-6)}
+    .card{background:var(--color-surface);border:1px solid rgba(40,37,29,.12);border-radius:var(--radius-xl);padding:var(--space-6);box-shadow:var(--shadow-sm)}
+    .card h3{font-size:var(--text-lg);font-weight:800;margin-bottom:var(--space-2)}
+    .card p{font-size:var(--text-sm);color:var(--color-text-muted)}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-4)}
+    .stat small{font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-muted)}
+    .stat strong{display:block;font-size:1.65rem;font-weight:900;font-variant-numeric:tabular-nums lining-nums;margin-top:var(--space-2)}
+    .stat span{font-size:var(--text-xs);color:var(--color-text-faint)}
+    .grid-2{display:grid;grid-template-columns:1.1fr .9fr;gap:var(--space-6)}
+    .section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-4);gap:var(--space-3)}
+    .section-title h3{margin:0}
+    .form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-4)}
+    .field{display:grid;gap:var(--space-2)}
+    .field label{font-size:var(--text-xs);font-weight:700;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.06em}
+    .field input,.field select{background:var(--color-surface-2);border:1px solid rgba(40,37,29,.12);border-radius:var(--radius-md);padding:.8rem .9rem;min-height:44px}
+    .field input:focus,.field select:focus{outline:2px solid var(--color-primary);outline-offset:2px}
+    .toolbar{display:flex;gap:var(--space-3);flex-wrap:wrap}
+    .table-wrap{overflow:auto;border-radius:var(--radius-lg);border:1px solid rgba(40,37,29,.12)}
+    table{width:100%;border-collapse:collapse;font-size:var(--text-sm);font-variant-numeric:tabular-nums lining-nums}
+    th,td{padding:.85rem .9rem;border-bottom:1px solid var(--color-divider);text-align:right;white-space:nowrap}
+    th:first-child,td:first-child,th:nth-child(2),td:nth-child(2),th:last-child,td:last-child{text-align:left}
+    th{position:sticky;top:0;background:var(--color-surface-offset);z-index:1;font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-muted)}
+    tr.is-q-end td{border-bottom:2px solid var(--color-primary);background:color-mix(in srgb,var(--color-primary-highlight) 18%,transparent)}
+    tr.is-2025 td{background:color-mix(in srgb,var(--color-surface-offset) 60%,transparent)}
+    tr.is-mid td{font-size:.85em;color:var(--color-text-muted)}
+    tr.is-mid td:first-child{padding-left:1.4rem}
+    .tag{display:inline-flex;align-items:center;gap:.45rem;padding:.35rem .7rem;border-radius:999px;background:var(--color-primary-highlight);color:var(--color-primary);font-size:var(--text-xs);font-weight:700}
+    .tag.warn{background:#fcebd5;color:var(--color-warning)}
+    .tag.ok{background:#dff0d1;color:var(--color-success)}
+    .note{padding:var(--space-4);border-radius:var(--radius-lg);background:var(--color-surface-offset);font-size:var(--text-sm);color:var(--color-text-muted)}
+    .note.warn{background:#fcebd5;color:#7a3510;border-left:3px solid var(--color-warning)}
+    .note.ok{background:#dff0d1;color:#2a5010;border-left:3px solid var(--color-success)}
+    .split{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-6)}
+    canvas{max-height:300px}
+    .special-list{display:grid;gap:var(--space-3)}
+    .special-item{display:grid;grid-template-columns:1fr 1fr 1.5fr auto;gap:var(--space-3);align-items:end;padding:var(--space-4);border-radius:var(--radius-lg);background:var(--color-surface-2);border:1px solid rgba(40,37,29,.1)}
+    .special-saving{grid-column:1/-1;font-size:var(--text-xs);color:var(--color-success);font-weight:700;margin-top:-.3rem;display:flex;align-items:center;gap:.4rem}
+    .special-saving svg{width:13px;height:13px}
+    .muted{color:var(--color-text-muted)}
+    .effzins-row{display:flex;gap:var(--space-6);flex-wrap:wrap;padding:var(--space-4);background:var(--color-surface-offset);border-radius:var(--radius-lg);font-size:var(--text-sm)}
+    .effzins-item small{display:block;font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-muted)}
+    .effzins-item strong{font-size:1.1rem;font-weight:800}
+    .storage-bar{display:flex;gap:var(--space-3);align-items:center;padding:var(--space-3) var(--space-4);background:var(--color-surface-offset);border-radius:var(--radius-lg);font-size:var(--text-xs);color:var(--color-text-muted)}
+    #toast{position:fixed;bottom:1.5rem;right:1.5rem;z-index:999;display:flex;flex-direction:column;gap:.5rem;pointer-events:none}
+    .toast-item{background:var(--color-text);color:var(--color-bg);padding:.75rem 1.25rem;border-radius:var(--radius-lg);font-size:var(--text-sm);font-weight:600;box-shadow:var(--shadow-lg);opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none}
+    .toast-item.show{opacity:1;transform:none}
+    .toast-item.ok{background:var(--color-success);color:#fff}
+    .toast-item.warn{background:var(--color-warning);color:#fff}
+    #saveIndicator{font-size:var(--text-xs);color:var(--color-text-faint);display:flex;align-items:center;gap:.3rem}
+    #saveIndicator svg{width:13px;height:13px}
+    .accuracy-badge{display:inline-flex;align-items:center;gap:.4rem;padding:.3rem .8rem;border-radius:999px;font-size:var(--text-xs);font-weight:700;background:#dff0d1;color:#2a5010}
+    @media(max-width:1024px){
+      .dashboard{grid-template-columns:72px 1fr}
+      .sidebar .brand p,.sidebar .brand h1,.sidebar .nav span{display:none}
+      .brand{justify-content:center;margin-bottom:var(--space-6)}
+      .nav button{justify-content:center;padding:.8rem}
+      .stats{grid-template-columns:repeat(2,1fr)}
+      .hero,.grid-2,.split{grid-template-columns:1fr}
+      .form-grid{grid-template-columns:repeat(2,1fr)}
+    }
+    /* ── MOBILE (≤ 768px) ── */
+    @media(max-width:768px){
+      html,body{height:auto;overflow:auto}
+      .dashboard{display:flex;flex-direction:column;height:auto;min-height:100dvh}
+      /* Sidebar als Bottom-Nav */
+      .sidebar{
+        order:99;
+        grid-row:unset;
+        width:100%;
+        padding:0;
+        border-right:none;
+        border-top:1px solid rgba(40,37,29,.12);
+        position:sticky;bottom:0;z-index:20;
+        overflow:visible;
+      }
+      .sidebar .brand{display:none}
+      .sidebar .nav{
+        display:flex;flex-direction:row;gap:0;
+        overflow-x:auto;-webkit-overflow-scrolling:touch;
+      }
+      .sidebar .nav button{
+        flex:1;min-width:52px;flex-direction:column;gap:4px;
+        padding:.6rem .4rem;font-size:.65rem;border-radius:0;
+        justify-content:center;align-items:center;
+      }
+      .sidebar .nav span{display:block;font-size:.65rem;line-height:1.1;text-align:center}
+      .sidebar .nav button svg{width:20px;height:20px}
+      /* Header */
+      .header{position:sticky;top:0;z-index:10;padding:0 var(--space-4)}
+      .header-title h2{font-size:1.1rem}
+      .header-title p{display:none}
+      #saveIndicator{display:none}
+      .header-actions{gap:var(--space-2)}
+      .btn:not(.primary){display:none} /* CSV-Button auf Mobile ausblenden */
+      /* Main */
+      .main{padding:var(--space-4);flex:1}
+      /* Karten */
+      .card{padding:var(--space-4);border-radius:var(--radius-lg)}
+      .stats{grid-template-columns:1fr 1fr;gap:var(--space-3)}
+      .stat strong{font-size:1.2rem}
+      .hero,.grid-2,.split,.stack{gap:var(--space-4)}
+      .form-grid{grid-template-columns:1fr}
+      .special-item{grid-template-columns:1fr 1fr;gap:var(--space-2)}
+      .special-item .field:nth-child(3){grid-column:1/-1}
+      /* Tabelle: horizontal scrollbar, kompakte Schrift */
+      .table-wrap{-webkit-overflow-scrolling:touch;border-radius:var(--radius-md)}
+      table{font-size:.75rem}
+      th,td{padding:.5rem .55rem;white-space:nowrap}
+      /* Charts */
+      canvas{max-height:220px}
+      /* Effektivzins-Row */
+      .effzins-row{flex-direction:column;gap:var(--space-3)}
+      /* Toolbar */
+      .toolbar{gap:var(--space-2)}
+      .btn{min-height:40px;padding:.6rem .8rem;font-size:.8rem}
+      .btn.primary{display:inline-flex}
+    }
+    @media(max-width:380px){
+      .stats{grid-template-columns:1fr}
+      .stat strong{font-size:1rem}
+    }
+    /* ── ZIELSZENARIO-SEKTION ── */
+    .szenarien-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-4);margin-top:var(--space-2)}
+    .szenario-card{border:1px solid rgba(40,37,29,.12);border-radius:var(--radius-lg);padding:var(--space-4);background:var(--color-surface-2);display:grid;gap:var(--space-3)}
+    .szenario-card.is-target{border-color:var(--color-primary);background:color-mix(in srgb,var(--color-primary-highlight) 25%,var(--color-surface-2))}
+    .szenario-card.is-faster{border-color:var(--color-success);background:color-mix(in srgb,#dff0d1 20%,var(--color-surface-2))}
+    .szenario-header{display:flex;justify-content:space-between;align-items:center}
+    .szenario-year{font-size:1.4rem;font-weight:900;font-variant-numeric:tabular-nums}
+    .szenario-rows{display:grid;gap:.35rem}
+    .szenario-row{display:flex;justify-content:space-between;font-size:var(--text-xs);gap:.5rem}
+    .szenario-row span:first-child{color:var(--color-text-muted)}
+    .szenario-row span:last-child{font-weight:700;text-align:right}
+    .szenario-row.highlight span:last-child{color:var(--color-primary);font-size:.95rem}
+    .szenario-row.saving span:last-child{color:var(--color-success)}
+    .szenario-row.extra span:last-child{color:var(--color-warning)}
+    .szenario-take{width:100%;margin-top:.25rem}
+    .szenario-impossible{text-align:center;padding:var(--space-4);color:var(--color-text-muted);font-size:var(--text-sm)}
+    .organic-bar{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);background:var(--color-surface-offset);border-radius:var(--radius-lg);font-size:var(--text-sm);flex-wrap:wrap}
+    .organic-bar strong{color:var(--color-primary)}
+    @media(max-width:768px){.szenarien-grid{grid-template-columns:1fr}}
+    /* ── CONFIRM-MODAL ── */
+    #confirmOverlay{
+      position:fixed;inset:0;z-index:9000;
+      background:rgba(0,0,0,.45);backdrop-filter:blur(4px);
+      display:flex;align-items:center;justify-content:center;
+      opacity:0;pointer-events:none;transition:opacity .18s;
+    }
+    #confirmOverlay.open{opacity:1;pointer-events:auto}
+    #confirmBox{
+      background:var(--color-surface);border:1px solid rgba(40,37,29,.14);
+      border-radius:var(--radius-xl);padding:var(--space-6);
+      box-shadow:var(--shadow-lg);max-width:420px;width:calc(100% - 2rem);
+      transform:translateY(10px) scale(.97);transition:transform .18s;
+    }
+    #confirmOverlay.open #confirmBox{transform:none}
+    #confirmBox h4{font-size:var(--text-base);font-weight:800;margin-bottom:.5rem}
+    #confirmBox p{font-size:var(--text-sm);color:var(--color-text-muted);margin-bottom:var(--space-5)}
+    #confirmBox .toolbar{justify-content:flex-end}
+    /* ── ZINSBRUCH-BADGE im Tilgungsplan ── */
+    tr.is-ratebreak td{
+      background:color-mix(in srgb,#fcebd5 35%,transparent);
+      border-top:2px dashed var(--color-warning);
+      font-weight:700;
+    }
+    /* ── PRINT ── */
+
+    /* ── JAHRESÜBERSICHT ── */
+    tr.is-year-total td{background:color-mix(in srgb,var(--color-primary-highlight) 30%,transparent);font-weight:800;border-top:2px solid var(--color-primary)}
+    /* ── STICHTAG-WIDGET ── */
+    .stichtag-box{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);padding:var(--space-4);background:var(--color-surface-offset);border-radius:var(--radius-lg);align-items:end}
+    .stichtag-result{font-size:1.5rem;font-weight:900;color:var(--color-primary);font-variant-numeric:tabular-nums}
+    .stichtag-sub{font-size:var(--text-xs);color:var(--color-text-muted);margin-top:.2rem}
+    /* ── ZINSSIMULATOR ── */
+    .zinssim-grid{display:grid;grid-template-columns:1fr 2fr;gap:var(--space-6);align-items:start}
+    .zinssim-result{display:grid;gap:var(--space-3)}
+    .zinssim-row{display:flex;justify-content:space-between;padding:.6rem .8rem;border-radius:var(--radius-md);background:var(--color-surface-2);font-size:var(--text-sm)}
+    .zinssim-row.highlight{background:color-mix(in srgb,var(--color-warning) 12%,var(--color-surface-2));font-weight:700}
+    .zinssim-row.ok{background:color-mix(in srgb,var(--color-success) 10%,var(--color-surface-2))}
+    input[type=range]{width:100%;accent-color:var(--color-primary);cursor:pointer;margin:.4rem 0}
+    .range-labels{display:flex;justify-content:space-between;font-size:var(--text-xs);color:var(--color-text-muted)}
+    @media(max-width:768px){.stichtag-box{grid-template-columns:1fr}.zinssim-grid{grid-template-columns:1fr}}
+    @media print{
+      .sidebar,.header,.toolbar,.btn,.icon-btn,#toast,#confirmOverlay{display:none!important}
+      .dashboard{display:block}.main{padding:0;overflow:visible}
+      .tab-panel{display:block!important}
+      html,body{height:auto;overflow:visible}
+    }
+    /* kept for compat */ @media print_DISABLED_OLD{
+      .sidebar,.header,.toolbar,.btn,.icon-btn,#toast{display:none!important}
+      .dashboard{display:block}
+      .main{padding:0;overflow:visible}
+      .tab-panel{display:block!important}
+      html,body{height:auto;overflow:visible}
+    }
+  </style>
+</head>
+<body>
+<div id="toast"></div>
+<!-- ── EIGENES CONFIRM-MODAL ── -->
+<div id="confirmOverlay" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+  <div id="confirmBox">
+    <h4 id="confirmTitle">Bestätigung</h4>
+    <p id="confirmMsg">Sind Sie sicher?</p>
+    <div class="toolbar">
+      <button class="btn" id="confirmCancel">Abbrechen</button>
+      <button class="btn danger-btn" id="confirmOk">Löschen</button>
+    </div>
+  </div>
+</div>
+<div class="dashboard">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16 12 4l8 12"/><path d="M8 16h8"/><path d="M10 20h4"/></svg>
+      </div>
+      <div><h1>Kreditrechner</h1><p>RLB Bauspardarlehen</p></div>
+    </div>
+    <nav class="nav" aria-label="Bereiche">
+      <button class="active" data-tab="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        <span>Übersicht</span></button>
+      <button data-tab="rechner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="14" y1="14" x2="16" y2="14"/></svg>
+        <span>Rechner</span></button>
+      <button data-tab="sonder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>Sondertilgungen</span></button>
+      <button data-tab="plan">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+        <span>Tilgungsplan</span></button>
+      <button data-tab="abgleich">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span>Auszug 2025</span></button>
+      <button data-tab="jahresplan">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="8.01" y2="14"/><line x1="12" y1="14" x2="12.01" y2="14"/><line x1="16" y1="14" x2="16.01" y2="14"/></svg>
+        <span>Jahresplan</span></button>
+      <button data-tab="test">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 0 0-2 2v4"/><path d="M15 3h4a2 2 0 0 1 2 2v4"/><path d="M9 21H5a2 2 0 0 1-2-2v-4"/><path d="M15 21h4a2 2 0 0 0 2-2v-4"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>
+        <span>Test</span></button>
+      <button data-tab="speichern">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        <span>Datenverwaltung</span></button>
+    </nav>
+  </aside>
+
+  <header class="header">
+    <div class="header-title">
+      <h2 id="headerTitle">Übersicht</h2>
+      <p id="headerSub">Banknahe Quartalslogik · Zahlungstag 7 · Valutadaten</p>
+    </div>
+    <div class="header-actions">
+      <div id="saveIndicator">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
+        <span id="saveTime">Nie gespeichert</span>
+      </div>
+      <button class="icon-btn" id="themeToggle" aria-label="Darstellung umschalten">
+        <svg id="themeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      </button>
+      <button class="btn" id="exportCsv">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV
+      </button>
+      <button class="btn primary" id="recalcAll">Neu berechnen</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="stack">
+
+      <!-- DASHBOARD -->
+      <section class="hero tab-panel" id="panel-dashboard">
+        <article class="card">
+          <div class="section-title">
+            <div><span class="tag">v3.5.1 – Banknahe Logik</span><h3>Raiffeisen Bauspardarlehen</h3></div>
+            <span class="accuracy-badge">✓ Auf Cent kalibriert</span>
+          </div>
+          <p>Quartalsweise Zinsabrechnung (1. bis letzter Quartalstag), Zahlungstag 7 mit Wochenendregel, Gebühr KV-gekoppelt ab 18,97 € (+3 % p.a.). Sondertilgungen ab Valutadatum zinssenkend. Fixzins 3,75 % bis 31.12.2029.</p>
+          <div class="toolbar" style="margin-top:1rem">
+            <button class="btn primary" onclick="switchTab('rechner')">Zum Rechner</button>
+            <button class="btn" onclick="switchTab('plan')">Zum Tilgungsplan</button>
+          </div>
+        </article>
+        <article class="card">
+          <h3>Status</h3>
+          <div class="stats" style="grid-template-columns:1fr 1fr;margin-top:1rem;gap:1rem">
+            <div class="stat"><small>Kapitalsaldo 31.12.2025</small><strong id="kpiStatement">–</strong><span>lt. Auszug banknah</span></div>
+            <div class="stat"><small>Schuldenfrei am</small><strong id="kpiDebtFree">–</strong><span id="kpiDebtFreeNote">–</span></div>
+            <div class="stat"><small>Gesamtzinsen ab 2026</small><strong id="kpiInterest">–</strong><span>Planhorizont</span></div>
+            <div class="stat"><small>Effektivzins p.a.</small><strong id="kpiEffzins">–</strong><span>inkl. Gebühren</span></div>
+            <div class="stat"><small>Restschuld bei Fixzins-Ende</small><strong id="kpiFixEnd">–</strong><span id="kpiFixEndNote">per 31.12.2029</span></div>
+            <div class="stat"><small>Zinsersparnis durch Sonder</small><strong id="kpiSaving">–</strong><span>vs. ohne Sondertilgung</span></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="stats tab-panel" id="panel-dashboard-stats">
+        <article class="card stat"><small>Fixzins</small><strong>3,75 %</strong><span>bis 31.12.2029</span></article>
+        <article class="card stat"><small>Regelrate</small><strong>831,05 €</strong><span>monatlich, Tag 7</span></article>
+        <article class="card stat"><small>Sondertilgungen ab 2026</small><strong id="kpiSpecial">–</strong><span>flexibel</span></article>
+        <article class="card stat"><small>Restschuld aktuell</small><strong id="kpiCurrent">–</strong><span>Stand heute</span></article>
+      </section>
+
+      <!-- STICHTAG-WIDGET -->
+      <section class="tab-panel" id="panel-dashboard-stichtag">
+        <article class="card">
+          <div class="section-title"><h3>Restschuld zu Stichtag</h3><span class="tag">Banknaher Saldo</span></div>
+          <div class="stichtag-box">
+            <div class="field">
+              <label>Stichtag wählen</label>
+              <input type="date" id="stichtagInput" style="min-height:44px">
+            </div>
+            <div>
+              <div class="stichtag-result" id="stichtagResult">–</div>
+              <div class="stichtag-sub" id="stichtagSub">Datum wählen um Saldo zu berechnen</div>
+            </div>
+          </div>
+          <div class="note" style="margin-top:.5rem;font-size:var(--text-xs)">Berechnung: letzter Quartalsabschluss + seither fällige Regelraten + Sondertilgungen bis zum Stichtag. Noch nicht gebuchte Quartalszinsen werden nicht addiert (entspricht Banksaldo).</div>
+        </article>
+      </section>
+
+      <section class="grid-2 tab-panel" id="panel-dashboard-charts">
+        <article class="card">
+          <div class="section-title"><h3>Restschuldverlauf</h3><span class="tag">Chart</span></div>
+          <canvas id="balanceChart"></canvas>
+        </article>
+        <article class="card">
+          <div class="section-title"><h3>Zinsen &amp; Sondertilgungen pro Quartal</h3><span class="tag">Chart</span></div>
+          <canvas id="flowChart"></canvas>
+        </article>
+      </section>
+
+      <!-- RECHNER -->
+      <section class="tab-panel" id="panel-rechner" hidden>
+        <article class="card stack">
+          <div class="section-title"><h3>Rechnerparameter</h3><span class="tag">Banknahe Einstellungen</span></div>
+          <div class="form-grid">
+            <div class="field"><label>Startsaldo 01.01.2026</label><input id="startBalance" type="number" step="0.01"></div>
+            <div class="field"><label>Fixzins p.a. (dezimal)</label><input id="interestRate" type="number" step="0.0001"></div>
+            <div class="field"><label>Monatsrate</label><input id="monthlyRate" type="number" step="0.01"></div>
+            <div class="field"><label>Zahlungstag (Standard: 7)</label><input id="paymentDay" type="number" min="1" max="28" step="1"></div>
+            <div class="field"><label>Quartalsgebühr <span style="font-weight:400;text-transform:none;color:var(--color-text-faint)">KV-Schätzung +3 % p.a.</span></label><input id="quarterFee" type="number" step="0.01"></div>
+            <div class="field"><label>Planjahre</label><input id="years" type="number" step="1" min="1" max="40"></div>
+            <div class="field"><label>Zinsmodus</label>
+              <select id="calcMode">
+                <option value="daily_360">Taggenau / 360 (RLB-Bankpraxis)</option>
+                <option value="daily_365">Taggenau / 365</option>
+                <option value="monthly">Monatlich vereinfacht</option>
+              </select>
+            </div>
+            <div class="field"><label>Sondertilgungslimit p.a. (0 = unbegrenzt)</label><input id="specialLimit" type="number" step="0.01" min="0"></div>
+            <div class="field"><label>Fixzins-Ende <span style="font-weight:400;text-transform:none;color:var(--color-text-faint)">letzter Tag Fixperiode</span></label><input id="fixedRateUntil" type="date"></div>
+            <div class="field"><label>Folgezins p.a. (dezimal) <span style="font-weight:400;text-transform:none;color:var(--color-text-faint)">ab Folgetag</span></label><input id="interestRate2" type="number" step="0.0001" min="0"></div>
+          </div>
+          <div class="effzins-row">
+            <div class="effzins-item"><small>Nominalzins p.a.</small><strong id="effNominal">–</strong></div>
+            <div class="effzins-item"><small>Effektivzins p.a. (inkl. Gebühren) *</small><strong id="effEffektiv">–</strong></div>
+            <div class="effzins-item"><small>Gesamtkosten Kredit</small><strong id="effTotal">–</strong></div>
+            <div class="effzins-item"><small>Schuldenfrei am</small><strong id="effDebtFree">–</strong></div>
+          </div>
+          <div class="note ok">
+            <strong>Banknahe Kalibrierung v3.4:</strong> Zinslauf 1. bis letzter Quartalstag inkl. · Zahlungstag 7, Wochenendregel · Gebühr KV-gekoppelt +3 % p.a. · Valutadatum maßgeblich. Block 2 (2025) trifft auf ±0,00 €. <strong>Neu:</strong> Zinsbruch taggenau ab Fixzins-Ende – Folgezins ab 01.01.2030 konfigurierbar.<br>
+            <span style="font-size:var(--text-xs);margin-top:.3rem;display:block">* Effektivzins: IRR-Methode, Quartalsbasis (^4 annualisiert), ohne Sondertilgungen, mit steigender Gebühr. Erwartet ~4,07 % (Nominalzins 3,75 % + Gebührenaufschlag ~0,32 %). Im Tilgungsplan markiert ⚡ die Quartalszelle des Zinsbruchs.</span>
+          </div>
+          <div id="limitWarningRechner"></div>
+        </article>
+
+        <!-- ── ZIELSZENARIO-SEKTION ── -->
+        <article class="card stack" id="zielCard">
+          <div class="section-title">
+            <div>
+              <span class="tag">Zielanalyse</span>
+              <h3>Was brauche ich um in <span id="zielYearLabel">–</span> Jahren schuldenfrei zu sein?</h3>
+            </div>
+          </div>
+          <p style="margin-top:-.5rem">Organisches Ende ohne zusätzliche Sondertilgungen vs. deinem Planjahr-Ziel. Die drei Szenarien zeigen welche gleichmäßige Jahres-Sondertilgung nötig wäre.</p>
+          <div class="organic-bar" id="organicBar">
+            <span>Organisches Ende (aktueller Plan):</span>
+            <strong id="organicEnd">–</strong>
+            <span id="organicDiff" style="color:var(--color-text-muted)"></span>
+          </div>
+          <div class="szenarien-grid" id="szenarienGrid">
+            <!-- wird per JS befüllt -->
+          </div>
+          <div class="note" style="font-size:var(--text-xs);margin-top:-.5rem">
+            Sondertilgungen werden gleichmäßig auf den <strong>15. März</strong> jedes Planjahres verteilt (anpassbar nach Übernahme). Zinslimit-Prüfung greift automatisch. Bereits vorhandene Sondertilgungen bleiben erhalten.
+          </div>
+        </article>
+      </section>
+
+      <!-- SONDER -->
+      <section class="tab-panel" id="panel-sonder" hidden>
+        <article class="card stack">
+          <div class="section-title">
+            <h3>Sondertilgungen</h3>
+            <button class="btn primary" id="addSpecial">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Zeile hinzufügen
+            </button>
+          </div>
+          <div id="specialLimitInfo"></div>
+          <div id="specialList" class="special-list"></div>
+        </article>
+      </section>
+
+      <!-- TILGUNGSPLAN -->
+      <section class="tab-panel" id="panel-plan" hidden>
+        <article class="card stack">
+          <div class="section-title">
+            <h3>Tilgungsplan</h3>
+            <div class="toolbar">
+              <button class="btn" id="jump2026">Ab 2026</button>
+              <button class="btn" id="downloadPlan">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Exportieren
+              </button>
+            </div>
+          </div>
+          <div class="note" style="margin-bottom:0">Monatliche Zeilen zeigen Saldenveränderung durch Regelrate/Sondertilgung. <strong>Farbige Quartalsabschlusszeile</strong> enthält Zinsen + Gebühr und den verbindlichen Endsaldo – dargestellt im <strong>3. Monat des Quartals</strong>. <span style="color:var(--color-text-muted)">Hinweis: Die tatsächliche Bankbuchung (Zinsen + Gebühr) erfolgt am <strong>1. des Folgequartals</strong> (01.01., 01.04., 01.07., 01.10.) – der Kontostand auf dem Kreditkonto weicht daher innerhalb eines laufenden Quartals planmäßig ab.</span> Grau = 2025-Belegblock.</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Periode</th><th>Von</th><th>Bis</th><th>Anfangssaldo</th><th>Regelraten</th><th>Sondertilgung</th><th>Gebühr</th><th>Zinsen</th><th>Endsaldo</th><th>Hinweis</th></tr></thead>
+              <tbody id="planBody"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <!-- AUSZUG 2025 -->
+      <section class="tab-panel" id="panel-abgleich" hidden>
+        <div class="split">
+          <article class="card stack">
+            <div class="section-title"><h3>Kontoauszug 2025</h3><span class="tag">Quelle: RLB Bausparkasse</span></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Buch.-Datum</th><th>Text</th><th>Valuta</th><th>Betrag</th><th>Typ</th></tr></thead>
+                <tbody id="statementBody"></tbody>
+              </table>
+            </div>
+          </article>
+          <article class="card stack">
+            <div class="section-title"><h3>Abgleich &amp; Kalibrierung</h3><span class="tag ok">✓ Verifiziert</span></div>
+            <div class="stats" style="grid-template-columns:1fr">
+              <div class="stat"><small>Alter Kapitalsaldo (01.07.2025)</small><strong>116.365,88 €</strong><span>Startsaldo Belegblock</span></div>
+              <div class="stat"><small>Neuer Kapitalsaldo (31.12.2025)</small><strong>103.474,19 €</strong><span>lt. Auszug = App-Ergebnis</span></div>
+              <div class="stat"><small>Rechenprüfung Block 2</small><strong style="color:var(--color-success)">± 0,00 €</strong><span>01.10–31.12.2025 exakt</span></div>
+            </div>
+            <div class="note ok">Block 2 (01.10.–31.12.2025) trifft auf den Cent. Block 1 weicht −0,01 € ab (Valuta 27.07. statt 28.07.). Die Banklogik ist vollständig kalibriert.</div>
+            <div class="note" style="margin-top:.5rem">Gebühr 2024/2025: konstant 18,42 € lt. Auszügen. Ab 2026 KV-gekoppelt ab 18,97 € (+3 % p.a.). Zinslauf: 1. Quartalstag bis letzter Quartalstag inkl. Zinsbuchung: Valuta = 1. Folgequartalstag.</div>
+          </article>
+        </div>
+      </section>
+
+      <!-- JAHRESÜBERSICHT -->
+      <section class="tab-panel" id="panel-jahresplan" hidden>
+        <article class="card stack">
+          <div class="section-title">
+            <h3>Jahresübersicht</h3>
+            <div class="toolbar">
+              <button class="btn" id="downloadJahr">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV
+              </button>
+            </div>
+          </div>
+          <div class="note" style="margin-bottom:0">Eine Zeile pro Jahr: Summe aller Regelraten, Sondertilgungen, Zinsen und Gebühren. Ideal für Bankgespräche und Jahresplanung.</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Jahr</th><th>Anfangssaldo</th><th>Regelraten</th>
+                <th>Sondertilgungen</th><th>Zinsen</th><th>Gebühren</th>
+                <th>Tilgung gesamt</th><th>Endsaldo</th>
+              </tr></thead>
+              <tbody id="jahresBody"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <!-- ZINSSIMULATOR -->
+        <article class="card stack" style="margin-top:0">
+          <div class="section-title">
+            <h3>Zinsänderungs-Simulator</h3>
+            <span class="tag warn">Ab 01.01.2030</span>
+          </div>
+          <p>Was kostet mich ein höherer Folgezins nach dem Fixende? Schieberegler zeigt sofort Auswirkung auf Laufzeit und Gesamtzinsen.</p>
+          <div class="zinssim-grid">
+            <div>
+              <div class="field" style="margin-bottom:var(--space-4)">
+                <label>Folgezins p.a.: <strong id="zinssimLabel">3,75 %</strong></label>
+                <input type="range" id="zinssimSlider" min="1" max="10" step="0.25" value="3.75">
+                <div class="range-labels"><span>1 %</span><span>4 %</span><span>7 %</span><span>10 %</span></div>
+              </div>
+              <div class="note" style="font-size:var(--text-xs)">Fixzins 3,75 % läuft bis 31.12.2029. Der Simulator berechnet ab 01.01.2030 mit dem gewählten Folgezins – alle Sondertilgungen bleiben erhalten.</div>
+            </div>
+            <div class="zinssim-result" id="zinssimResult">
+              <!-- wird per JS befüllt -->
+            </div>
+          </div>
+          <div class="section-title" style="margin-top:var(--space-6)">
+            <h3 style="font-size:var(--text-base)">Anschlussfinanzierung – Szenarienvergleich</h3>
+            <span class="tag">Für Bankgespräch</span>
+          </div>
+          <p style="font-size:var(--text-sm);margin-top:-.5rem">Was bedeuten verschiedene Folgezinsen ab 01.01.2030 konkret? Tabelle zum Ausdrucken für die Beratungsdokumentation.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Folgezins ab 2030</th><th>Schuldenfrei am</th>
+                <th>Gesamtzinsen</th><th>Gesamtkosten</th><th>Mehrkosten vs. 3,75 %</th>
+              </tr></thead>
+              <tbody id="anschlussBody"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <!-- DATENVERWALTUNG -->
+      <!-- TEST: Zinsrechner -->
+      <section class="tab-panel" id="panel-test" hidden>
+        <article class="card stack">
+          <div class="section-title">
+            <h3>Zinsrechner – Schnelltest</h3>
+            <span class="tag">Testbereich</span>
+          </div>
+          <p style="color:var(--color-text-muted);font-size:var(--text-sm)">Berechne Zinsen für einen beliebigen Betrag, Zeitraum und Zinssatz – unabhängig vom Hauptrechner.</p>
+          <div class="form-grid" style="grid-template-columns:repeat(3,1fr)">
+            <div class="field"><label>Kapitalbetrag (€)</label><input id="testKapital" type="number" step="0.01" value="100000" min="0"></div>
+            <div class="field"><label>Zinssatz p.a. (%)</label><input id="testZins" type="number" step="0.001" value="3.75" min="0" max="25"></div>
+            <div class="field"><label>Zinsmodus</label>
+              <select id="testModus">
+                <option value="360">Taggenau / 360 (RLB-Bankpraxis)</option>
+                <option value="365">Taggenau / 365</option>
+                <option value="30">30/360 (monatlich vereinfacht)</option>
+              </select>
+            </div>
+            <div class="field"><label>Von (Datum)</label><input id="testVon" type="date"></div>
+            <div class="field"><label>Bis (Datum)</label><input id="testBis" type="date"></div>
+            <div class="field" style="align-self:end">
+              <label style="visibility:hidden">Berechnen</label>
+              <button class="btn primary" id="testCalcBtn" style="width:100%">Berechnen</button>
+            </div>
+          </div>
+          <div id="testResult" style="display:none">
+            <div class="effzins-row" style="margin-top:.5rem">
+              <div class="effzins-item"><small>Tage</small><strong id="testTage">–</strong></div>
+              <div class="effzins-item"><small>Zinsen (€)</small><strong id="testZinsenEur" style="color:var(--color-warning)">–</strong></div>
+              <div class="effzins-item"><small>Tageszins (€/Tag)</small><strong id="testTagesZins">–</strong></div>
+              <div class="effzins-item"><small>Endbetrag (€)</small><strong id="testEndbetrag">–</strong></div>
+            </div>
+            <div class="note ok" id="testFormel" style="margin-top:.5rem;font-size:var(--text-xs)"></div>
+          </div>
+          <div class="note" style="margin-top:.5rem;font-size:var(--text-xs)">
+            Dieser Bereich ist vom Hauptrechner vollständig unabhängig – ideal zum Nachrechnen einzelner Quartalszinsen oder Sondertilgungseffekte.
+          </div>
+        </article>
+      </section>
+
+      <section class="tab-panel" id="panel-speichern" hidden>
+        <div class="split">
+          <article class="card stack">
+            <div class="section-title"><h3>Automatisches Speichern</h3><span class="tag ok">Aktiv</span></div>
+            <div class="storage-bar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;color:var(--color-primary)"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/></svg>
+              LocalStorage aktiv – Daten bleiben im Browser erhalten.
+            </div>
+            <p>Jede Parameteränderung wird automatisch gespeichert und beim nächsten Öffnen wiederhergestellt.</p>
+            <div class="field"><label>Letzter Speicherzeitpunkt</label><input readonly id="lastSavedDisplay" style="background:var(--color-surface-offset);cursor:default"></div>
+            <div class="toolbar">
+              <button class="btn primary" id="manualSave">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/></svg>Jetzt speichern
+              </button>
+              <button class="btn" id="clearStorage">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Lokale Daten löschen
+              </button>
+            </div>
+          </article>
+          <article class="card stack">
+            <div class="section-title"><h3>Geräteübergabe</h3><span class="tag">JSON</span></div>
+            <p>Export als JSON → auf anderem Gerät (Handy, Tablet, PC) importieren. Alle Parameter und Sondertilgungen werden übertragen.</p>
+            <div class="toolbar" style="margin-top:.5rem">
+              <button class="btn primary" id="exportJson">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Einstellungen exportieren (.json)
+              </button>
+            </div>
+            <div class="field" style="margin-top:.5rem">
+              <label>JSON-Datei importieren</label>
+              <input type="file" id="importFile" accept=".json" style="padding:.5rem;cursor:pointer">
+            </div>
+            <div class="note" id="importStatus" style="display:none"></div>
+          </article>
+        </div>
+        <div style="margin-top:var(--space-6)">
+          <article class="card">
+            <ul style="font-size:var(--text-sm);color:var(--color-text-muted);display:grid;gap:.5rem;padding-left:1.2rem">
+              <li>LocalStorage ist gerätespezifisch – für Geräteübergabe immer JSON-Export verwenden.</li>
+              <li>Beim Löschen des Browser-Caches gehen lokale Daten verloren.</li>
+              <li>Die JSON-Datei enthält keine personenbezogenen Daten außer den Kreditparametern.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<script>
+// ── FORMATIERUNG ────────────────────────────────────────────────────────────
+const eur = new Intl.NumberFormat('de-AT',{style:'currency',currency:'EUR'});
+const pct = new Intl.NumberFormat('de-AT',{style:'percent',minimumFractionDigits:2,maximumFractionDigits:2});
+const dFmt = new Intl.DateTimeFormat('de-AT');
+const STORAGE_KEY = 'kreditrechner_v32';
+
+// ── AUSZUG 2025 (mit korrekten Valutadaten lt. Originalbeleg) ───────────────
+const statementRows = [
+  {book:'2025-07-07', text:'Zahlung', valuta:'2025-07-07', amount:831.05,   type:'Regelrate'},
+  {book:'2025-07-18', text:'Zahlung', valuta:'2025-07-18', amount:5000.00,  type:'Sondertilgung'},
+  {book:'2025-07-28', text:'Zahlung', valuta:'2025-07-27', amount:2000.00,  type:'Sondertilgung'},  // Valuta 27.07 lt. Originalbeleg
+  {book:'2025-08-07', text:'Zahlung', valuta:'2025-08-07', amount:831.05,   type:'Regelrate'},
+  {book:'2025-09-08', text:'Zahlung', valuta:'2025-09-08', amount:831.05,   type:'Regelrate'},      // 07.09=So→08.09
+  {book:'2025-09-30', text:'Kontoführung', valuta:'2025-09-30', amount:18.42, type:'Gebühr'},
+  {book:'2025-09-30', text:'Sollzinsen (3,75 %)', valuta:'2025-10-01', amount:1048.17, type:'Zinsen'},
+  {book:'2025-10-07', text:'Zahlung', valuta:'2025-10-07', amount:831.05,   type:'Regelrate'},
+  {book:'2025-11-07', text:'Zahlung', valuta:'2025-11-07', amount:831.05,   type:'Regelrate'},
+  {book:'2025-11-28', text:'Zahlung', valuta:'2025-11-28', amount:3000.00,  type:'Sondertilgung'},
+  {book:'2025-12-09', text:'Zahlung', valuta:'2025-12-09', amount:831.05,   type:'Regelrate'},      // 07.12=So→09.12
+  {book:'2025-12-31', text:'Kontoführung', valuta:'2025-12-31', amount:18.42, type:'Gebühr'},
+  {book:'2025-12-31', text:'Sollzinsen (3,75 %)', valuta:'2026-01-01', amount:1009.60, type:'Zinsen'}
+];
+
+// ── DEFAULT STATE ────────────────────────────────────────────────────────────
+const DEFAULT_STATE = {
+  startBalance:   103474.19,
+  interestRate:   0.0375,
+  interestRate2:  0.0375,      // v3.2: Folgezins nach Fixende (Default = gleich, bis bekannt)
+  fixedRateUntil: '2029-12-31',// v3.2: letzter Tag der Fixzinsperiode
+  monthlyRate:    831.05,
+  paymentDay:     7,
+  quarterFee:     18.97,
+  years:          10,
+  calcMode:       'daily_360',
+  specialLimit:   0,
+  specialPayments:[
+    {date:'2026-03-13', amount:5000, note:'bereits erfolgt'},
+    {date:'2026-03-23', amount:5000, note:'bereits erfolgt'}
+  ]
+};
+
+let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+let balanceChart, flowChart;
+
+const qs  = s => document.querySelector(s);
+const qsa = s => [...document.querySelectorAll(s)];
+const toDate     = s => new Date(s + 'T00:00:00');
+const formatDate = d => dFmt.format(d);
+const round2     = n => Math.round((n + Number.EPSILON) * 100) / 100;
+const daysBetween= (a,b) => Math.max(0, Math.round((b-a)/(1000*60*60*24)));
+const addDays    = (d,n) => { const c=new Date(d); c.setDate(c.getDate()+n); return c; };
+
+// ── WOCHENEND-ZAHLUNGSTAG ────────────────────────────────────────────────────
+// Sa→nächster Mo (+2), So→Mo (+1)
+function nextBusinessDay(year, month, day){
+  const d = new Date(year, month, Math.min(day, 28));
+  const wd = d.getDay(); // 0=So,6=Sa
+  if(wd === 6) d.setDate(d.getDate()+2);
+  else if(wd === 0) d.setDate(d.getDate()+1);
+  return d;
+}
+
+function paymentDateFor(year, month){
+  return nextBusinessDay(year, month, state.paymentDay);
+}
+
+// ── QUARTALSHILFSFUNKTIONEN ──────────────────────────────────────────────────
+function quarterOf(d){ return Math.floor(d.getMonth()/3); }
+function quarterStart(d){ return new Date(d.getFullYear(), quarterOf(d)*3, 1); }
+function quarterEnd(d){
+  const qs = quarterOf(d)*3;
+  return new Date(d.getFullYear(), qs+3, 0); // letzter Tag des Quartals
+}
+function lastDayOfMonth(d){ return new Date(d.getFullYear(), d.getMonth()+1, 0); }
+function monthLabel(d){ return d.toLocaleDateString('de-AT',{month:'short',year:'numeric'}); }
+function periodLabel(from,to){ return dFmt.format(from)+' – '+dFmt.format(to); }
+
+// ── 2025-BELEGBLOCK (banknah, unveränderlich) ────────────────────────────────
+function build2025Block(){
+  return [
+    {period:'07.07.–30.09.2025', from:new Date('2025-07-07'), to:new Date('2025-09-30'),
+     begin:116365.88, rates:2493.15, special:7000, fee:18.42, interest:1048.17, end:107939.32,
+     note:'Belegblock Q3/2025', isQ:true, is2025:true},
+    {period:'01.10.–31.12.2025', from:new Date('2025-10-01'), to:new Date('2025-12-31'),
+     begin:107939.32, rates:2493.15, special:3000, fee:18.42, interest:1009.60, end:103474.19,
+     note:'Belegblock Q4/2025', isQ:true, is2025:true}
+  ];
+}
+
+// ── ZINSSATZ FÜR DATUM (Zinsbruch-Logik) ─────────────────────────────────────
+// Gibt den effektiven Zinssatz zurück: Fixzins bis fixedRateUntil inkl., danach Rate2
+function rateForDate(d){
+  if(!state.fixedRateUntil) return state.interestRate;
+  const cutoff = toDate(state.fixedRateUntil);
+  return d <= cutoff ? state.interestRate : (state.interestRate2 || state.interestRate);
+}
+
+// ── ZINSBERECHNUNG (taggenau, ab Quartalsbeginn, Zinsbruch-fähig) ────────────
+function calcInterest(begin, events, qStart, qEnd){
+  const mode = state.calcMode;
+  if(mode === 'monthly'){
+    // Vereinfacht: Quartalsmittelzins
+    const midDate = new Date((qStart.getTime() + qEnd.getTime()) / 2);
+    return round2(begin * rateForDate(midDate) / 12 * 3);
+  }
+  const divisor = mode === 'daily_365' ? 365 : 360;
+
+  // Zinsbruch-Datum: wenn innerhalb des Quartals, als Extra-Event einfügen
+  let allEvents = [...events];
+  if(state.fixedRateUntil){
+    const cutoff = toDate(state.fixedRateUntil);
+    const breakDay = addDays(cutoff, 1); // erster Tag mit neuem Zins
+    if(breakDay >= qStart && breakDay <= qEnd){
+      // Dummy-Event mit amount=0: Zins ändert sich, Saldo nicht
+      allEvents.push({date:breakDay, amount:0, isRateBreak:true});
+      allEvents.sort((a,b)=>a.date-b.date);
+    }
+  }
+
+  let running = begin, cursor = qStart, total = 0;
+  for(const ev of allEvents){
+    const d = daysBetween(cursor, ev.date);
+    total += running * rateForDate(cursor) * d / divisor;
+    if(!ev.isRateBreak) running -= ev.amount;
+    if(running < 0) running = 0;
+    cursor = ev.date;
+  }
+  // Rest bis Quartalsende inklusiv
+  const d = daysBetween(cursor, qEnd) + 1;
+  total += running * rateForDate(cursor) * d / divisor;
+  return round2(total);
+}
+
+// ── SONDERTILGUNGEN ──────────────────────────────────────────────────────────
+function specialsInRange(from, to){
+  return state.specialPayments
+    .filter(p => { const d=toDate(p.date); return d>=from && d<=to; })
+    .sort((a,b)=>a.date.localeCompare(b.date));
+}
+
+// ── QUARTAL BERECHNEN ────────────────────────────────────────────────────────
+function calcQuarterRow(qStart, qEnd, begin){
+  // Regelraten: Zahlungstag in jedem Monat des Quartals
+  const payDates = [];
+  let m = new Date(qStart.getFullYear(), qStart.getMonth(), 1);
+  while(m <= qEnd){
+    payDates.push(paymentDateFor(m.getFullYear(), m.getMonth()));
+    m = new Date(m.getFullYear(), m.getMonth()+1, 1);
+  }
+
+  const specials = specialsInRange(qStart, qEnd);
+  const specialSum = round2(specials.reduce((s,p)=>s+Number(p.amount||0),0));
+
+  // Alle Events (Raten + Sonder) sortiert für Zinsberechnung
+  const events = [
+    ...payDates.map(d=>({date:d, amount:state.monthlyRate})),
+    ...specials.map(p=>({date:toDate(p.date), amount:Number(p.amount||0)}))
+  ].sort((a,b)=>a.date-b.date);
+
+  const feeGrowthRate = 0.03; // KV-gekoppelt +3% p.a.
+  const yearOffset = qStart.getFullYear() - 2026;
+  const fee = round2(state.quarterFee * Math.pow(1 + feeGrowthRate, yearOffset));
+  const interest = calcInterest(begin, events, qStart, qEnd);
+  const totalRates = round2(state.monthlyRate * payDates.length);
+  const end = round2(Math.max(0, begin + interest + fee - totalRates - specialSum));
+
+  // Zinsbruch: trifft dieses Quartal die Grenze, ODER beginnt es bereits mit Rate2?
+  const cutoff = state.fixedRateUntil ? toDate(state.fixedRateUntil) : null;
+  const isRateBreak = cutoff && (
+    (cutoff >= qStart && cutoff <= qEnd) ||          // Bruch liegt IM Quartal
+    (addDays(cutoff,1).getTime() === qStart.getTime()) // Bruch war letzter Tag VOR diesem Quartal
+  );
+
+  const label = qStart.toLocaleDateString('de-AT',{day:'2-digit',month:'2-digit'})
+    +'–'+qEnd.toLocaleDateString('de-AT',{day:'2-digit',month:'2-digit',year:'numeric'});
+
+  return {
+    period: label,
+    from: qStart, to: qEnd,
+    begin, rates: totalRates, special: specialSum,
+    fee, interest, end,
+    note: isRateBreak
+      ? (addDays(cutoff,1).getTime()===qStart.getTime() ? `⚡ Ab ${dFmt.format(qStart)}: Folgezins ${((state.interestRate2||state.interestRate)*100).toFixed(2)} %` : `⚡ Zinsbruch ${dFmt.format(addDays(cutoff,1))}: ${(state.interestRate*100).toFixed(2)} % → ${((state.interestRate2||state.interestRate)*100).toFixed(2)} %`)
+      : (specials.length ? `${specials.length} Sondertilgung(en)` : 'Quartal'),
+    isQ: true, is2025: false, isRateBreak
+  };
+}
+
+// ── PLAN AUFBAUEN ────────────────────────────────────────────────────────────
+// Struktur: pro Quartal 3 Monatszeilen (nur Regelrate/Sonder, kein Zins) +
+//           1 Quartalsabschlusszeile (Zinsen + Gebühr, echter Endsaldo)
+function buildPlan(){
+  const rows = [...build2025Block()];
+  let balance = round2(state.startBalance);
+  const years = Number(state.years||10);
+  let d = new Date(2026, 0, 1);
+  const planEnd = new Date(2026 + years, 0, 1);
+
+  while(d < planEnd){
+    const qS = quarterStart(d);
+    const qE = quarterEnd(d);
+    const qRow = calcQuarterRow(qS, qE, balance); // Quartal komplett berechnen
+
+    // ── Monatliche Zwischenzeilen ──────────────────────────────────────────
+    // Laufender Interims-Saldo: nur Raten + Sonder abziehen (noch keine Zinsen/Gebühr)
+    let interim = balance;
+    const months = [];
+    let m = new Date(qS.getFullYear(), qS.getMonth(), 1);
+    let mIdx = 0;
+    while(m <= qE){
+      const mEnd  = new Date(m.getFullYear(), m.getMonth()+1, 0);
+      const payD  = paymentDateFor(m.getFullYear(), m.getMonth());
+      const mSpec = specialsInRange(m, mEnd);
+      const mSpecSum = round2(mSpec.reduce((s,p)=>s+Number(p.amount||0),0));
+      const mBegin = interim;
+      // Interimssaldo: Anfang minus Rate minus Sonder (Zinsen kommen erst am Quartalsende)
+      interim = round2(Math.max(0, interim - state.monthlyRate - mSpecSum));
+      const isLastMonth = (mIdx === 2); // 3. Monat im Quartal = Abschlussmonat
+      months.push({
+        period: m.toLocaleDateString('de-AT',{month:'short',year:'numeric'}),
+        from: new Date(m), to: mEnd,
+        begin: mBegin,
+        rates: state.monthlyRate,
+        special: mSpecSum,
+        fee: isLastMonth ? qRow.fee : 0,       // Gebühr nur in letztem Monat anzeigen
+        interest: isLastMonth ? qRow.interest : 0, // Zinsen nur in letztem Monat anzeigen
+        // Endsaldo: in letztem Monat = echter Quartalsendsaldo, sonst nur Interimssaldo
+        end: isLastMonth ? qRow.end : interim,
+        note: mSpec.length
+          ? mSpec.map(p=>`Sonder ${eur.format(p.amount)}`).join(', ')
+          : (isLastMonth ? 'Quartalsabschluss' : 'Regelrate'),
+        isQ:     isLastMonth,   // Quartalsabschluss-Styling
+        isMid:   !isLastMonth,  // Zwischenzeile
+        is2025:  false
+      });
+      m = new Date(m.getFullYear(), m.getMonth()+1, 1);
+      mIdx++;
+    }
+    rows.push(...months);
+    balance = qRow.end;
+    if(balance <= 0) break;
+    d = new Date(qE.getFullYear(), qE.getMonth()+1, 1);
+  }
+  return rows;
+}
+
+// ── KPIs ─────────────────────────────────────────────────────────────────────
+function updateKPIs(rows){
+  const future = rows.filter(r=>!r.is2025 && r.isQ); // nur Quartalsabschlüsse
+  // ── Restschuld HEUTE = Kapitalstand wie Bank-Live-Saldo ──────────────────
+  // letzter abgeschlossener Quartalsabschluss minus seither geflossene
+  // Raten + Sondertilgungen (laufende Q-Zinsen noch nicht gebucht)
+  const today = new Date();
+  const done = future.filter(r => r.to <= today);
+  let last;
+  if(done.length){
+    const lastQ = done[done.length-1];
+    let saldo = lastQ.end;
+    // seit Quartalsende geflossene Monatsraten zählen
+    let m = new Date(lastQ.to.getFullYear(), lastQ.to.getMonth()+1, 1);
+    while(m <= today){
+      const payD = paymentDateFor(m.getFullYear(), m.getMonth());
+      if(payD <= today) saldo = round2(saldo - state.monthlyRate);
+      // Sondertilgungen in diesem Monat bis heute
+      const mEnd = new Date(m.getFullYear(), m.getMonth()+1, 0);
+      specialsInRange(m, mEnd).forEach(p=>{
+        if(toDate(p.date) <= today) saldo = round2(saldo - Number(p.amount||0));
+      });
+      m = new Date(m.getFullYear(), m.getMonth()+1, 1);
+    }
+    last = { end: Math.max(0, saldo) };
+  } else {
+    last = future.length ? { end: state.startBalance } : null;
+  }
+
+  // ── Restschuld bei Fixzins-Ende ──────────────────────────────────────────
+  if(state.fixedRateUntil){
+    const fixEndSaldo = calcSaldoAtDate(toDate(state.fixedRateUntil));
+    const el = qs('#kpiFixEnd'); if(el) el.textContent = eur.format(fixEndSaldo);
+    const note = qs('#kpiFixEndNote'); if(note) note.textContent = 'per ' + dFmt.format(toDate(state.fixedRateUntil));
+  }
+  // ── Zinsersparnis durch Sondertilgungen (gesamt, über Planhorizont) ──────
+  try {
+    const zinsenMit = future.reduce((s,r)=>s+r.interest,0);
+    // Simuliere OHNE Sondertilgungen (gleiche Parameter, leere Sonderliste)
+    const origPay = state.specialPayments;
+    state.specialPayments = [];
+    const rowsOhne = buildPlan();
+    state.specialPayments = origPay;
+    const zinsenOhne = rowsOhne.filter(r=>!r.is2025 && r.isQ).reduce((s,r)=>s+r.interest,0);
+    const saving = round2(zinsenOhne - zinsenMit);
+    const elS = qs('#kpiSaving');
+    if(elS) elS.textContent = saving > 0 ? '−' + eur.format(saving) : eur.format(0);
+  } catch(e){ const elS=qs('#kpiSaving'); if(elS) elS.textContent='–'; }
+
+  qs('#kpiStatement').textContent = eur.format(103474.19);
+  qs('#kpiCurrent').textContent   = eur.format(last ? last.end : state.startBalance);
+  qs('#kpiInterest').textContent  = eur.format(future.reduce((s,r)=>s+r.interest,0));
+  qs('#kpiSpecial').textContent   = eur.format(future.reduce((s,r)=>s+r.special,0));
+
+  const freeRow = future.find(r=>r.end<=0);
+  const freeText = freeRow ? dFmt.format(freeRow.to) : '> '+state.years+' J.';
+  const freeNote = freeRow ? 'voraussichtlich' : 'außerhalb Planhorizont';
+  qs('#kpiDebtFree').textContent     = freeText;
+  qs('#kpiDebtFreeNote').textContent = freeNote;
+  qs('#effDebtFree').textContent     = freeText;
+  qs('#effNominal').textContent      = pct.format(state.interestRate);
+
+  const totalCost = round2(future.reduce((s,r)=>s+r.interest+r.fee,0));
+  qs('#effTotal').textContent = eur.format(totalCost);
+
+  // Effektivzins: IRR ohne Sondertilgungen, exakter letzter CF, ^4 annualisiert
+  try {
+    const feeGrow = 0.03;
+    const cfIRR = [-state.startBalance];
+    let balIRR = state.startBalance;
+    let done = false;
+    for(let y = 2026; y <= 2051 && !done; y++){ // IRR-Fix: immer 25 Jahre, unabhängig von Planjahren
+      const feeY = round2(state.quarterFee * Math.pow(1 + feeGrow, y - 2026));
+      for(let q = 0; q < 4 && !done; q++){
+        const qS = new Date(y, q*3, 1);
+        const qE = quarterEnd(qS);
+        // Zinsen nur auf Regelraten (keine Sonder)
+        const pays = [];
+        for(let m=0;m<3;m++) pays.push(paymentDateFor(y, q*3+m));
+        const evts = pays.map(d=>({date:d,amount:state.monthlyRate})).sort((a,b)=>a.date-b.date);
+        let cursor=qS, running=balIRR, totalInt=0;
+        for(const ev of evts){
+          const d=daysBetween(cursor,ev.date);
+          totalInt+=running*state.interestRate*d/360;
+          running-=ev.amount; if(running<0)running=0;
+          cursor=ev.date;
+        }
+        const d=daysBetween(cursor,qE)+1;
+        totalInt+=running*state.interestRate*d/360;
+        const interest=round2(totalInt);
+        const end=round2(Math.max(0, balIRR+interest+feeY-state.monthlyRate*3));
+        if(end<=0){
+          cfIRR.push(round2(balIRR+interest+feeY)); // exakter letzter CF
+          done=true;
+        } else {
+          cfIRR.push(round2(state.monthlyRate*3+feeY));
+        }
+        balIRR=end;
+      }
+    }
+    // Newton-Raphson IRR
+    let r=0.01;
+    for(let i=0;i<500;i++){
+      let f=0,df=0;
+      cfIRR.forEach((c,j)=>{f+=c/Math.pow(1+r,j); df-=j*c/Math.pow(1+r,j+1);});
+      if(Math.abs(df)<1e-14) break;
+      const rn=r-f/df;
+      if(Math.abs(rn-r)<1e-10){r=rn;break;}
+      r=rn;
+    }
+    const eff=round2(Math.pow(1+r,4)-1); // ^4 = quartalsweise korrekt
+    const effStr=pct.format(eff);
+    qs('#kpiEffzins').textContent=effStr;
+    qs('#effEffektiv').textContent=effStr+' *';
+  } catch(e){ qs('#kpiEffzins').textContent='n/a'; qs('#effEffektiv').textContent='n/a'; }
+}
+
+// ── TILGUNGSPLAN RENDERN ─────────────────────────────────────────────────────
+function renderPlan(rows){
+  qs('#planBody').innerHTML = rows.map(r=>{
+    const cls = (r.is2025?'is-2025 ':'') + (r.isQ?'is-q-end ':'') + (r.isMid?'is-mid ':'') + (r.isRateBreak?'is-ratebreak':'');
+    const feeStr      = r.isMid  ? '<span class="muted">–</span>' : eur.format(r.fee);
+    const interestStr = r.isMid  ? '<span class="muted">–</span>' : eur.format(r.interest);
+    const endStyle    = r.isQ    ? 'font-weight:800' : (r.isMid ? 'color:var(--color-text-muted)' : '');
+    const midTip=r.isMid?` title="Zwischenzeile: Zinsen &amp; Gebühr erst am Quartalsende – Saldo vorläufig"`:'';
+    return `<tr class="${cls}"${midTip}>
+      <td>${r.period}</td>
+      <td>${dFmt.format(r.from)}</td>
+      <td>${dFmt.format(r.to)}</td>
+      <td>${eur.format(r.begin)}</td>
+      <td>${eur.format(r.rates)}</td>
+      <td>${r.special>0 ? eur.format(r.special) : '<span class="muted">–</span>'}</td>
+      <td>${feeStr}</td>
+      <td>${interestStr}</td>
+      <td style="${endStyle}">${eur.format(r.end)}</td>
+      <td>${r.note}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── CHARTS ───────────────────────────────────────────────────────────────────
+function renderCharts(rows){
+  const qRows = rows.filter(r => !r.is2025 && r.isQ); // nur Quartalsabschlüsse
+  const labels = qRows.map(r => {
+    const d = r.from;
+    const q = Math.floor(d.getMonth()/3) + 1;
+    return `Q${q} ${String(d.getFullYear()).slice(2)}`;
+  });
+
+  balanceChart?.destroy();
+  flowChart?.destroy();
+
+  // ── Chart 1: Restschuldverlauf ──────────────────────────────────────────
+  balanceChart = new Chart(qs('#balanceChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Restschuld',
+        data: qRows.map(r => r.end),
+        borderColor: '#01696f',
+        backgroundColor: 'rgba(1,105,111,.1)',
+        fill: true, tension: .3, pointRadius: 2, borderWidth: 2, pointHoverRadius: 5
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: ctx => ctx[0].label,
+            label: ctx => `Restschuld: € ${ctx.parsed.y.toLocaleString('de-AT', {minimumFractionDigits:2, maximumFractionDigits:2})}`
+          }
+        }
+      },
+      scales: {
+        y: { ticks: { callback: v => '€ ' + v.toLocaleString('de-AT') }, grid: { color: 'rgba(128,128,128,.12)' } },
+        x: { ticks: { maxTicksLimit: 10 } }
+      }
+    }
+  });
+
+  // ── Chart 2: Zinsen (links) + Sondertilgungen (rechts) ──────────────────
+  flowChart = new Chart(qs('#flowChart'), {
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'line',
+          label: 'Quartalszinsen',
+          data: qRows.map(r => r.interest),
+          borderColor: '#964219',
+          backgroundColor: 'rgba(150,66,25,.0)',
+          yAxisID: 'yZinsen',
+          tension: .3, pointRadius: 2, borderWidth: 2, pointHoverRadius: 5
+        },
+        {
+          type: 'bar',
+          label: 'Sondertilgungen',
+          data: qRows.map(r => r.special),
+          backgroundColor: 'rgba(67,122,34,.75)',
+          yAxisID: 'ySonder',
+          borderRadius: 3
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: € ${ctx.parsed.y.toLocaleString('de-AT', {minimumFractionDigits:2, maximumFractionDigits:2})}`
+          }
+        }
+      },
+      scales: {
+        yZinsen: {
+          type: 'linear', position: 'left',
+          title: { display: true, text: 'Zinsen (€)', font: { size: 10 }, color: '#964219' },
+          ticks: { callback: v => '€ ' + v.toLocaleString('de-AT'), color: '#964219', font: { size: 10 } },
+          grid: { color: 'rgba(150,66,25,.1)' }
+        },
+        ySonder: {
+          type: 'linear', position: 'right',
+          title: { display: true, text: 'Sondertilgung (€)', font: { size: 10 }, color: '#437a22' },
+          ticks: { callback: v => '€ ' + v.toLocaleString('de-AT'), color: '#437a22', font: { size: 10 } },
+          grid: { drawOnChartArea: false }
+        },
+        x: { ticks: { maxTicksLimit: 10 } }
+      }
+    }
+  });
+}
+
+// ── AUSZUG RENDERN ───────────────────────────────────────────────────────────
+function renderStatement(){
+  qs('#statementBody').innerHTML = statementRows.map(r=>{
+    const vNote = r.book !== r.valuta.replace(/-/g,'').replace(/(\d{4})(\d{2})(\d{2})/,'$1-$2-$3') ? ' *' : '';
+    return `<tr><td>${dFmt.format(toDate(r.book))}</td><td>${r.text}</td><td>${dFmt.format(toDate(r.valuta))}${vNote}</td><td>${eur.format(r.amount)}</td><td>${r.type}</td></tr>`;
+  }).join('');
+}
+
+// ── SONDERTILGUNGEN ──────────────────────────────────────────────────────────
+function checkLimits(){
+  if(!state.specialLimit || state.specialLimit < 1) return []; // < 1 € = unbegrenzt
+  const byYear={};
+  state.specialPayments.forEach(p=>{
+    const y=p.date?p.date.slice(0,4):'0';
+    byYear[y]=round2((byYear[y]||0)+Number(p.amount||0));
+  });
+  return Object.entries(byYear)
+    .filter(([,t])=>t>state.specialLimit)
+    .map(([year,total])=>({year,total,over:round2(total-state.specialLimit)}));
+}
+
+function renderLimitWarnings(){
+  const v=checkLimits();
+  const html=v.map(x=>`<div class="note warn" style="margin-bottom:.5rem">⚠ Jahr ${x.year}: Sondertilgungen ${eur.format(x.total)} überschreiten Limit um <strong>${eur.format(x.over)}</strong></div>`).join('');
+  ['#specialLimitInfo','#limitWarningRechner'].forEach(id=>{
+    const el=qs(id); if(!el) return;
+    el.innerHTML=html; el.style.display=html?'':'none';
+  });
+}
+
+function calcSavingForSpecial(idx){
+  // Zinsersparnis dieser einen Sondertilgung: Differenz Gesamtzinsen mit vs. ohne diese Zeile
+  let orig = state.specialPayments;
+  try {
+    const item = state.specialPayments[idx];
+    if(!item || !Number(item.amount)) return 0;
+    const zinsenMit = buildPlan().filter(r=>!r.is2025 && r.isQ).reduce((s,r)=>s+r.interest,0);
+    orig = state.specialPayments;
+    state.specialPayments = orig.filter((_,i)=>i!==idx);
+    const zinsenOhne = buildPlan().filter(r=>!r.is2025 && r.isQ).reduce((s,r)=>s+r.interest,0);
+    return round2(zinsenOhne - zinsenMit);
+  } catch(e){ return 0; }
+  finally { state.specialPayments = orig; } // ← state IMMER wiederherstellen
+}
+
+function renderSpecials(){
+  const wrap=qs('#specialList');
+  wrap.innerHTML='';
+  state.specialPayments.forEach((item,idx)=>{
+    const row=document.createElement('div');
+    row.className='special-item';
+    const saving = calcSavingForSpecial(idx);
+    const savingHtml = saving > 0
+      ? `<div class="special-saving"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Spart ca. ${eur.format(saving)} Zinsen über die Laufzeit</div>`
+      : '';
+    row.innerHTML=`
+      <div class="field"><label>Datum (Valuta)</label><input type="date" value="${item.date}" data-kind="date" data-idx="${idx}"></div>
+      <div class="field"><label>Betrag (€)</label><input type="number" step="0.01" value="${item.amount}" data-kind="amount" data-idx="${idx}"></div>
+      <div class="field"><label>Kommentar</label><input type="text" value="${item.note||''}" data-kind="note" data-idx="${idx}"></div>
+      <button class="btn danger-btn" data-remove="${idx}" style="align-self:end">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+      </button>
+      ${savingHtml}`;
+    wrap.appendChild(row);
+  });
+  wrap.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',e=>{
+    const idx=Number(e.target.dataset.idx), kind=e.target.dataset.kind;
+    state.specialPayments[idx][kind]=kind==='amount'?Number(e.target.value||0):e.target.value;
+    scheduleRecompute(); saveToStorage(true);
+  }));
+  wrap.querySelectorAll('[data-remove]').forEach(btn=>btn.addEventListener('click',async e=>{
+    const idx=Number(e.target.closest('[data-remove]').dataset.remove);
+    const item=state.specialPayments[idx];
+    const lbl=item?.amount?`${eur.format(Number(item.amount))} vom ${item.date}`:'diese Sondertilgung';
+    const ok=await confirmModal('Sondertilgung löschen?',`Sondertilgung ${lbl} wirklich löschen?`,'Löschen');
+    if(!ok) return;
+    state.specialPayments.splice(idx,1);
+    renderSpecials(); recompute(); saveToStorage(true);
+  }));
+}
+
+// ── INPUTS VERDRAHTEN ────────────────────────────────────────────────────────
+function wireInputs(){
+  // Numerische Felder
+  const numMap={startBalance:'startBalance',interestRate:'interestRate',monthlyRate:'monthlyRate',
+             paymentDay:'paymentDay',quarterFee:'quarterFee',years:'years',
+             specialLimit:'specialLimit',interestRate2:'interestRate2'};
+  Object.entries(numMap).forEach(([id,key])=>{
+    const el=qs('#'+id); if(!el) return;
+    el.value=state[key];
+    el.addEventListener('input',()=>{
+      state[key]=Number(el.value||0);
+      scheduleRecompute(); saveToStorage(true);
+    });
+  });
+  // Select
+  const selMap={calcMode:'calcMode'};
+  Object.entries(selMap).forEach(([id,key])=>{
+    const el=qs('#'+id); if(!el) return;
+    el.value=state[key];
+    el.addEventListener('input',()=>{
+      state[key]=el.value;
+      scheduleRecompute(); saveToStorage(true);
+    });
+  });
+  // Datumsfeld
+  const dateEl=qs('#fixedRateUntil'); if(dateEl){
+    dateEl.value=state.fixedRateUntil||'';
+    dateEl.addEventListener('input',()=>{
+      state.fixedRateUntil=dateEl.value||'';
+      scheduleRecompute(); saveToStorage(true);
+    });
+  }
+}
+
+// ── EXPORT ───────────────────────────────────────────────────────────────────
+function exportRows(rows,name){
+  // Meta-Header: Zeitstempel + Parameter
+  const now=new Date().toLocaleString('de-AT');
+  const meta=[
+    [`Kreditrechner RLB Bauspardarlehen v3 – Export vom ${now}`],
+    [`Startsaldo:`,state.startBalance,`Zinssatz p.a.:`,pct.format(state.interestRate),
+     `Monatsrate:`,eur.format(state.monthlyRate),`Planjahre:`,state.years],
+    []
+  ];
+  const hdr=['Periode','Von','Bis','Anfangssaldo','Regelraten','Sondertilgung','Gebühr','Zinsen','Endsaldo','Hinweis'];
+  const data=rows.map(r=>[r.period,dFmt.format(r.from),dFmt.format(r.to),r.begin,r.rates,r.special,r.fee,r.interest,r.end,r.note]);
+  const csv=[...meta,hdr,...data].map(row=>row.map(v=>`"${String(v).replaceAll('"','""')}"`).join(';')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); URL.revokeObjectURL(a.href);
+}
+
+// ── ZIELSZENARIO-BERECHNUNG ───────────────────────────────────────────────────
+
+// Organisches Ende: wann endet der Kredit ohne zusätzliche Sondertilgungen
+// (mit den aktuell eingetragenen Sondertilgungen, aber ohne neue)
+function calcOrganicEnd(){
+  const rows = buildPlan(); // nutzt aktuellen state inkl. vorhandener Sonder
+  const qRows = rows.filter(r => !r.is2025 && r.isQ);
+  const free = qRows.find(r => r.end <= 0);
+  return free ? free.to : null; // null = außerhalb Planhorizont
+}
+
+// Simuliert Plan mit ZUSÄTZLICHEN gleichmäßigen Jahres-Sondertilgungen
+// annualExtra: Betrag pro Jahr zusätzlich (je 1× am 15.3. jedes Jahres)
+// Gibt { end: Date|null, totalInterest, rows } zurück
+function simWithExtra(annualExtra){
+  // Temporäre Kopie des state mit extra Sonder hinzugefügt
+  const targetYears = Number(state.years);
+  const extraPayments = [];
+  for(let y = 2026; y < 2026 + targetYears; y++){
+    const dt = `${y}-03-15`;
+    // Nur zukünftige Zahlungen (ab heute)
+    if(toDate(dt) >= new Date(2026,0,1)){
+      extraPayments.push({date: dt, amount: round2(annualExtra), note: `Zielplan ${y}`});
+    }
+  }
+
+  // State temporär überschreiben
+  const origPayments = state.specialPayments;
+  state.specialPayments = [...origPayments, ...extraPayments];
+  const rows = buildPlan();
+  state.specialPayments = origPayments; // zurücksetzen
+
+  const qRows = rows.filter(r => !r.is2025 && r.isQ);
+  const free = qRows.find(r => r.end <= 0);
+  const totalInterest = round2(qRows.reduce((s,r) => s + r.interest, 0));
+  return { end: free ? free.to : null, totalInterest, rows };
+}
+
+// Bisektionssuche: welche jährliche Sondertilgung bringt den Kredit in `targetYears` ans Ende?
+// Gibt { found, annualAmount, endDate, totalInterest, zinsSaving } zurück
+function calcRequiredAnnualSpecial(targetYears){
+  // Zieldatum: letzter Tag des Zieljahres (Q4-Ende)
+  const targetDate = new Date(2025 + targetYears, 11, 31);
+
+  // Prüfen ob es ohne Sonder schon erreichbar ist
+  const base = simWithExtra(0);
+  if(base.end && base.end <= targetDate){
+    return { found: true, annualAmount: 0, endDate: base.end,
+             totalInterest: base.totalInterest, zinsSaving: 0, alreadyReached: true };
+  }
+
+  // Prüfen ob es überhaupt erreichbar ist (mit sehr hohen Sonder)
+  const maxTry = simWithExtra(state.startBalance); // theoretisches Maximum
+  if(!maxTry.end || maxTry.end > targetDate){
+    return { found: false }; // nicht erreichbar in diesem Zeitraum
+  }
+
+  // Bisektion: lo=0, hi=Startsaldo
+  let lo = 0, hi = state.startBalance, best = null;
+  for(let i = 0; i < 40; i++){
+    const mid = round2((lo + hi) / 2);
+    const sim = simWithExtra(mid);
+    if(sim.end && sim.end <= targetDate){
+      best = { annualAmount: mid, endDate: sim.end, totalInterest: sim.totalInterest };
+      hi = mid;
+    } else {
+      lo = mid;
+    }
+    if(hi - lo < 1) break; // Cent-Genauigkeit reicht
+  }
+
+  if(!best) return { found: false };
+
+  // Zinssparnis gegenüber Plan ohne Extra-Sonder
+  const baseSim = simWithExtra(0);
+  const zinsSaving = round2((baseSim.totalInterest || 0) - best.totalInterest);
+
+  return {
+    found: true,
+    annualAmount: best.annualAmount,
+    endDate: best.endDate,
+    totalInterest: best.totalInterest,
+    zinsSaving,
+    alreadyReached: false
+  };
+}
+
+// Szenarien rendern: Planjahre-1, Planjahre, Planjahre+1
+function renderZielSzenarien(){
+  const targetYears = Number(state.years);
+  qs('#zielYearLabel').textContent = targetYears;
+
+  // Organisches Ende berechnen
+  const organicEnd = calcOrganicEnd();
+  const organicEl = qs('#organicEnd');
+  const organicDiff = qs('#organicDiff');
+  if(organicEnd){
+    organicEl.textContent = dFmt.format(organicEnd);
+    const organicYears = round2((organicEnd - new Date(2026,0,1)) / (365.25*24*3600*1000));
+    organicDiff.textContent = `(in ca. ${organicYears.toFixed(1)} Jahren)`;
+  } else {
+    organicEl.textContent = '> ' + targetYears + ' J.';
+    organicDiff.textContent = '(außerhalb Planhorizont)';
+  }
+
+  // 3 Szenarien berechnen
+  const scenarios = [targetYears - 1, targetYears, targetYears + 1]
+    .filter(y => y >= 1 && y <= 40);
+
+  const grid = qs('#szenarienGrid');
+  grid.innerHTML = '';
+
+  scenarios.forEach(years => {
+    const result = calcRequiredAnnualSpecial(years);
+    const isTarget = years === targetYears;
+    const isFaster = years < targetYears;
+
+    const card = document.createElement('div');
+    card.className = 'szenario-card' + (isTarget ? ' is-target' : isFaster ? ' is-faster' : '');
+
+    if(!result.found){
+      card.innerHTML = `
+        <div class="szenario-header">
+          <div class="szenario-year">${years} Jahre</div>
+          <span class="tag warn">Nicht erreichbar</span>
+        </div>
+        <div class="szenario-impossible">Selbst mit maximaler Tilgung nicht in diesem Zeitraum möglich.</div>`;
+      grid.appendChild(card);
+      return;
+    }
+
+    const tagLabel = isTarget ? 'Ziel' : isFaster ? 'Früher' : 'Später';
+    const tagClass = isTarget ? '' : isFaster ? 'ok' : 'warn';
+    const targetDateStr = dFmt.format(new Date(2025 + years, 11, 31));
+
+    card.innerHTML = `
+      <div class="szenario-header">
+        <div class="szenario-year">${years} Jahre</div>
+        <span class="tag ${tagClass}">${tagLabel}</span>
+      </div>
+      <div class="szenario-rows">
+        <div class="szenario-row"><span>Zieldatum</span><span>${targetDateStr}</span></div>
+        <div class="szenario-row"><span>Voraussichtlich fertig</span><span>${result.endDate ? dFmt.format(result.endDate) : '–'}</span></div>
+        ${result.alreadyReached
+          ? `<div class="szenario-row highlight"><span>Zusatz-Sonder/Jahr</span><span style="color:var(--color-success)">Nicht nötig ✓</span></div>`
+          : `<div class="szenario-row highlight"><span>Zusatz-Sonder/Jahr</span><span>${eur.format(result.annualAmount)}</span></div>`
+        }
+        <div class="szenario-row saving"><span>Zinssparnis</span><span>${result.zinsSaving > 0 ? '−' + eur.format(result.zinsSaving) : '–'}</span></div>
+        <div class="szenario-row"><span>Gesamtzinsen</span><span>${eur.format(result.totalInterest)}</span></div>
+      </div>
+      ${!result.alreadyReached && result.annualAmount > 0
+        ? `<button class="btn primary szenario-take" data-years="${years}" data-amount="${result.annualAmount}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            ${eur.format(result.annualAmount)}/Jahr übernehmen
+          </button>`
+        : ''
+      }`;
+    grid.appendChild(card);
+  });
+
+  // Übernahme-Buttons verdrahten
+  grid.querySelectorAll('.szenario-take').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const years  = Number(btn.dataset.years);
+      const amount = Number(btn.dataset.amount);
+      const ok = await confirmModal(
+        'Sondertilgungen übernehmen?',
+        `Für ${years} Jahre je ${eur.format(amount)} am 15. März hinzufügen (${years} Einträge)? Bestehende Sondertilgungen bleiben erhalten.`,
+        'Übernehmen', 'primary'
+      );
+      if(!ok) return;
+
+      for(let y = 2026; y < 2026 + years; y++){
+        const dt = `${y}-03-15`;
+        if(toDate(dt) >= new Date()){
+          state.specialPayments.push({date: dt, amount: round2(amount), note: `Zielplan ${y} (${years}J)`});
+        }
+      }
+      renderSpecials();
+      recompute();
+      saveToStorage(true);
+      toast(`${years} Sondertilgungen à ${eur.format(amount)} eingetragen ✓`, 'ok');
+      switchTab('sonder'); // direkt zum Sonder-Tab springen
+    });
+  });
+}
+
+// ── ANSCHLUSSFINANZIERUNG-TABELLE ────────────────────────────────────────────
+function renderAnschlusstabelle(){
+  const body = qs('#anschlussBody');
+  if(!body) return;
+  const base = runZinssimulator(state.interestRate || 0.0375, true); // Basis 3,75 %
+  const szenarien = [0.0375, 0.04, 0.05, 0.06, 0.07];
+  body.innerHTML = szenarien.map(z => {
+    const sim = runZinssimulator(z, z === (state.interestRate||0.0375));
+    const mehrkost = round2(sim.totalCost - base.totalCost);
+    const isBasis = Math.abs(z - (state.interestRate||0.0375)) < 0.0001;
+    const endStr = sim.endDate ? dFmt.format(sim.endDate) : '> 25 J.';
+    const mehrStr = isBasis ? '<span class="muted">Basis</span>'
+      : (mehrkost > 0 ? '<span style="color:var(--color-warning);font-weight:700">+' + eur.format(mehrkost) + '</span>'
+                      : '<span style="color:var(--color-success);font-weight:700">−' + eur.format(Math.abs(mehrkost)) + '</span>');
+    return `<tr${isBasis?' style="background:color-mix(in srgb,var(--color-primary-highlight) 20%,transparent);font-weight:600"':''}>
+      <td>${(z*100).toLocaleString('de-AT',{minimumFractionDigits:2})} %</td>
+      <td>${endStr}</td>
+      <td>${eur.format(sim.totalInterest)}</td>
+      <td>${eur.format(sim.totalCost)}</td>
+      <td>${mehrStr}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── DEBOUNCE für recompute (150 ms) ──────────────────────────────────────────
+let _recomputeTimer = null;
+function scheduleRecompute(){
+  clearTimeout(_recomputeTimer);
+  _recomputeTimer = setTimeout(()=>recompute(), 150);
+}
+
+// ── EINGABE-VALIDIERUNG ──────────────────────────────────────────────────
+function validateInputs(){
+  const errors=[];
+  if(!state.startBalance||state.startBalance<=0)
+    errors.push('Startsaldo muss größer als 0 sein.');
+  if(!state.interestRate||state.interestRate<=0||state.interestRate>0.25)
+    errors.push('Zinssatz muss zwischen 0,01\u202f% und 25,00\u202f% liegen.');
+  if(state.interestRate2 && (state.interestRate2<=0||state.interestRate2>0.25))
+    errors.push('Folgezins muss zwischen 0,01\u202f% und 25,00\u202f% liegen.');
+  if(!state.monthlyRate||state.monthlyRate<=0)
+    errors.push('Monatsrate muss größer als 0 sein.');
+  if(state.monthlyRate<round2(state.startBalance*state.interestRate/12))
+    errors.push('Monatsrate deckt nicht die Monatszinsen \u2013 Kredit w\u00e4chst unbegrenzt.');
+  if(!state.years||state.years<1||state.years>40)
+    errors.push('Planjahre m\u00fcssen zwischen 1 und 40 liegen.');
+  if(!state.paymentDay||state.paymentDay<1||state.paymentDay>28)
+    errors.push('Zahlungstag muss zwischen 1 und 28 liegen.');
+  if(state.quarterFee<0)
+    errors.push('Quartalsgebühr darf nicht negativ sein.');
+  // specialLimit < 1: nur Hinweis, kein harter Fehler – auto-korrigieren
+  if(state.specialLimit > 0 && state.specialLimit < 1){
+    state.specialLimit = 0; // auto-korrigieren
+    const inp = document.getElementById('specialLimit');
+    if(inp) inp.value = 0;
+  }
+  let box=document.getElementById('validationErrors');
+  if(!box){
+    box=document.createElement('div');
+    box.id='validationErrors';
+    box.style.cssText='background:#fcebd5;color:#7a3510;border-left:3px solid #964219;'
+      +'border-radius:.5rem;padding:.75rem 1rem;margin-bottom:1rem;font-size:.85rem;display:none;grid-column:1/-1;';
+    const panel=document.getElementById('panel-rechner');
+    if(panel){const fg=panel.querySelector('.form-grid');if(fg)fg.before(box);}
+  }
+  if(errors.length){
+    box.innerHTML=errors.map(e=>`<div style="margin:.15rem 0">&#9888;\u202f${e}</div>`).join('');
+    box.style.display='block';
+    return false;
+  }
+  box.style.display='none';
+  return true;
+}
+function recompute(){
+  if(!validateInputs()) return;
+  const rows=buildPlan();
+  updateKPIs(rows);
+  renderPlan(rows);
+  renderCharts(rows);
+  renderLimitWarnings();
+  renderZielSzenarien();
+  renderJahresplan(rows);
+  renderZinssimulator();
+  renderAnschlusstabelle();
+  setupStichtag();
+  qs('#exportCsv').onclick=()=>exportRows(rows,'kreditrechner-export.csv');
+  qs('#downloadPlan').onclick=()=>exportRows(rows,'tilgungsplan.csv');
+  return rows;
+}
+
+// ── LOCALSTORAGE ─────────────────────────────────────────────────────────────
+function saveToStorage(silent=false){
+  try{
+    const payload={savedAt:new Date().toISOString(),state:{
+      startBalance:state.startBalance,interestRate:state.interestRate,monthlyRate:state.monthlyRate,
+      paymentDay:state.paymentDay,quarterFee:state.quarterFee,years:state.years,
+      calcMode:state.calcMode,specialLimit:state.specialLimit,specialPayments:state.specialPayments,
+      interestRate2:state.interestRate2,fixedRateUntil:state.fixedRateUntil
+    }};
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));
+    const ts=dFmt.format(new Date())+', '+new Date().toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'});
+    qs('#saveTime').textContent=ts;
+    const d=qs('#lastSavedDisplay'); if(d) d.value=ts;
+    if(!silent) toast('Gespeichert ✓','ok');
+  }catch(e){toast('Speichern fehlgeschlagen','warn');}
+}
+
+function loadFromStorage(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return false;
+    const parsed=JSON.parse(raw); if(!parsed.state) return false;
+    const s=parsed.state;
+    state=Object.assign({},DEFAULT_STATE,{
+      startBalance:s.startBalance??DEFAULT_STATE.startBalance,
+      interestRate:s.interestRate??DEFAULT_STATE.interestRate,
+      interestRate2:s.interestRate2??DEFAULT_STATE.interestRate2,
+      fixedRateUntil:s.fixedRateUntil??DEFAULT_STATE.fixedRateUntil,
+      monthlyRate:s.monthlyRate??DEFAULT_STATE.monthlyRate,
+      paymentDay:s.paymentDay??DEFAULT_STATE.paymentDay,
+      quarterFee:s.quarterFee??DEFAULT_STATE.quarterFee,
+      years:s.years??DEFAULT_STATE.years,
+      calcMode:s.calcMode??DEFAULT_STATE.calcMode,
+      specialLimit:s.specialLimit??0,
+      specialPayments:Array.isArray(s.specialPayments)?s.specialPayments:DEFAULT_STATE.specialPayments
+    });
+    const savedAt=parsed.savedAt?new Date(parsed.savedAt):null;
+    if(savedAt){
+      const ts=dFmt.format(savedAt)+', '+savedAt.toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'});
+      qs('#saveTime').textContent=ts;
+      const d=qs('#lastSavedDisplay'); if(d) d.value=ts;
+    }
+    return true;
+  }catch(e){return false;}
+}
+
+// ── JSON EXPORT/IMPORT ───────────────────────────────────────────────────────
+function exportJson(){
+  const payload={app:'Kreditrechner v3.4 – RLB Bauspardarlehen',exportedAt:new Date().toISOString(),
+    state:{startBalance:state.startBalance,interestRate:state.interestRate,monthlyRate:state.monthlyRate,
+      paymentDay:state.paymentDay,quarterFee:state.quarterFee,years:state.years,
+      calcMode:state.calcMode,specialLimit:state.specialLimit,specialPayments:state.specialPayments,
+      interestRate2:state.interestRate2,fixedRateUntil:state.fixedRateUntil}};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='kreditrechner-v3-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click(); URL.revokeObjectURL(a.href);
+  toast('JSON-Export erstellt ✓','ok');
+}
+
+function importJson(file){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const parsed=JSON.parse(e.target.result);
+      const s=parsed.state; if(!s||typeof s.startBalance==='undefined') throw new Error('Ungültiges Format');
+      state=Object.assign({},DEFAULT_STATE,{
+        startBalance:s.startBalance,interestRate:s.interestRate??DEFAULT_STATE.interestRate,
+        interestRate2:s.interestRate2??DEFAULT_STATE.interestRate2,
+        fixedRateUntil:s.fixedRateUntil??DEFAULT_STATE.fixedRateUntil,
+        monthlyRate:s.monthlyRate??DEFAULT_STATE.monthlyRate,paymentDay:s.paymentDay??DEFAULT_STATE.paymentDay,
+        quarterFee:s.quarterFee??DEFAULT_STATE.quarterFee,years:s.years??DEFAULT_STATE.years,
+        calcMode:s.calcMode??DEFAULT_STATE.calcMode,specialLimit:s.specialLimit??0,
+        specialPayments:Array.isArray(s.specialPayments)?s.specialPayments:[]
+      });
+      wireInputs(); renderSpecials(); recompute(); saveToStorage(true);
+      const el=qs('#importStatus'); el.className='note ok'; el.style.display='';
+      el.textContent='✓ Import erfolgreich. Exportiert am: '+(parsed.exportedAt?new Date(parsed.exportedAt).toLocaleString('de-AT'):'unbekannt');
+      toast('Einstellungen importiert ✓','ok');
+    }catch(err){
+      const el=qs('#importStatus'); el.className='note warn'; el.style.display='';
+      el.textContent='✗ Fehler beim Import: '+err.message;
+      toast('Import fehlgeschlagen','warn');
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ── TOAST ────────────────────────────────────────────────────────────────────
+function toast(msg,type='',duration=2800){
+  const el=document.createElement('div');
+  el.className='toast-item'+(type?' '+type:''); el.textContent=msg;
+  qs('#toast').appendChild(el);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('show')));
+  setTimeout(()=>{el.classList.remove('show');setTimeout(()=>el.remove(),300);},duration);
+}
+
+// ── NAVIGATION ───────────────────────────────────────────────────────────────
+const TAB_TITLES={dashboard:'Übersicht',rechner:'Rechnerparameter',sonder:'Sondertilgungen',
+                  plan:'Tilgungsplan',abgleich:'Auszug 2025',jahresplan:'Jahresübersicht',speichern:'Datenverwaltung',test:'Test – Zinsrechner'};
+
+function switchTab(target){
+  qsa('.nav button').forEach(x=>x.classList.remove('active'));
+  const btn=qs(`.nav button[data-tab="${target}"]`); if(btn) btn.classList.add('active');
+  if(target==='dashboard'){
+    qsa('.tab-panel').forEach(p=>p.hidden=false);
+  } else {
+    qsa('.tab-panel').forEach(p=>p.hidden=true);
+    const panel=qs(`#panel-${target}`); if(panel) panel.hidden=false;
+  }
+  qs('#headerTitle').textContent=TAB_TITLES[target]||target;
+}
+
+function setupNav(){
+  qsa('.nav button').forEach(btn=>btn.addEventListener('click',()=>switchTab(btn.dataset.tab)));
+  // Dashboard: alle Dashboard-Panels sichtbar, Rest hidden
+  qsa('.tab-panel').forEach(p=>p.hidden=!p.id.startsWith('panel-dashboard'));
+  qs('#panel-dashboard').hidden=false;
+}
+
+function setupTheme(){
+  const root=document.documentElement;
+  let dark=window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const apply=()=>{
+    root.setAttribute('data-theme',dark?'dark':'light');
+    qs('#themeIcon').innerHTML=dark
+      ?'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'
+      :'<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>';
+  };
+  apply();
+  qs('#themeToggle').addEventListener('click',()=>{dark=!dark;apply();});
+}
+
+
+// ── RESTSCHULD ZU STICHTAG ───────────────────────────────────────────────────
+function calcSaldoAtDate(targetDate){
+  const rows = buildPlan();
+  const future = rows.filter(r => !r.is2025 && r.isQ);
+  // letzter Quartalsabschluss VOR oder AM Stichtag
+  const done = future.filter(r => r.to <= targetDate);
+  if(!done.length){
+    // noch kein Quartal abgeschlossen → Startsaldo minus Raten seit 01.01.2026
+    let saldo = state.startBalance;
+    let m = new Date(2026,0,1);
+    while(m <= targetDate){
+      const payD = paymentDateFor(m.getFullYear(), m.getMonth());
+      if(payD <= targetDate) saldo = round2(saldo - state.monthlyRate);
+      const mEnd = new Date(m.getFullYear(), m.getMonth()+1, 0);
+      specialsInRange(m, mEnd).forEach(p=>{
+        if(toDate(p.date) <= targetDate) saldo = round2(saldo - Number(p.amount||0));
+      });
+      m = new Date(m.getFullYear(), m.getMonth()+1, 1);
+    }
+    return Math.max(0, saldo);
+  }
+  const lastQ = done[done.length-1];
+  let saldo = lastQ.end;
+  if(saldo <= 0) return 0;
+  // seit Quartalsende fällige Raten + Sonder bis Stichtag
+  let m = new Date(lastQ.to.getFullYear(), lastQ.to.getMonth()+1, 1);
+  while(m <= targetDate){
+    const payD = paymentDateFor(m.getFullYear(), m.getMonth());
+    if(payD <= targetDate) saldo = round2(saldo - state.monthlyRate);
+    const mEnd = new Date(m.getFullYear(), m.getMonth()+1, 0);
+    specialsInRange(m, mEnd).forEach(p=>{
+      if(toDate(p.date) <= targetDate) saldo = round2(saldo - Number(p.amount||0));
+    });
+    m = new Date(m.getFullYear(), m.getMonth()+1, 1);
+  }
+  return Math.max(0, saldo);
+}
+
+function setupStichtag(){
+  const inp = qs('#stichtagInput');
+  if(!inp) return;
+  // Default: heute
+  inp.value = new Date().toISOString().slice(0,10);
+  function update(){
+    const d = toDate(inp.value);
+    if(isNaN(d)) return;
+    const saldo = calcSaldoAtDate(d);
+    qs('#stichtagResult').textContent = eur.format(saldo);
+    qs('#stichtagSub').textContent = 'Banknaher Saldo per ' + dFmt.format(d)
+      + (saldo === 0 ? ' – Kredit bereits getilgt ✓' : '');
+  }
+  inp.addEventListener('input', update);
+  update();
+}
+
+// ── JAHRESÜBERSICHT RENDERN ──────────────────────────────────────────────────
+function renderJahresplan(rows){
+  const body = qs('#jahresBody');
+  if(!body) return;
+  // Nur ab 2026, Quartalsabschlüsse gruppiert nach Jahr
+  const future = rows.filter(r => !r.is2025);
+  const byYear = {};
+  future.forEach(r => {
+    const y = r.from.getFullYear();
+    if(!byYear[y]) byYear[y] = {year:y, begin:null, rates:0, special:0, interest:0, fee:0, end:0};
+    const yr = byYear[y];
+    if(yr.begin === null) yr.begin = r.begin;
+    yr.rates   = round2(yr.rates   + (r.rates   || 0));
+    yr.special = round2(yr.special + (r.special || 0));
+    yr.interest= round2(yr.interest+ (r.interest|| 0));
+    yr.fee     = round2(yr.fee     + (r.fee     || 0));
+    if(r.isQ) yr.end = r.end; // letzter Quartalsabschluss = Jahresende
+  });
+  const years = Object.values(byYear).sort((a,b)=>a.year-b.year);
+  body.innerHTML = years.map(yr => {
+    const tilgung = round2(yr.rates + yr.special);
+    return `<tr class="is-year-total">
+      <td><strong>${yr.year}</strong></td>
+      <td>${eur.format(yr.begin)}</td>
+      <td>${eur.format(yr.rates)}</td>
+      <td>${yr.special > 0 ? eur.format(yr.special) : '<span class="muted">–</span>'}</td>
+      <td>${eur.format(yr.interest)}</td>
+      <td>${eur.format(yr.fee)}</td>
+      <td>${eur.format(tilgung)}</td>
+      <td><strong>${eur.format(yr.end)}</strong></td>
+    </tr>`;
+  }).join('');
+
+  // CSV-Export für Jahresplan
+  const dlBtn = qs('#downloadJahr');
+  if(dlBtn) dlBtn.onclick = () => {
+    const hdr = ['Jahr','Anfangssaldo','Regelraten','Sondertilgungen','Zinsen','Gebühren','Tilgung gesamt','Endsaldo'];
+    const data = years.map(yr => [yr.year, yr.begin, yr.rates, yr.special, yr.interest, yr.fee, round2(yr.rates+yr.special), yr.end]);
+    const csv = [hdr,...data].map(r=>r.map(v=>`"${v}"`).join(';')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
+    a.download = 'jahresplan.csv'; a.click(); URL.revokeObjectURL(a.href);
+  };
+}
+
+// ── ZINSSIMULATOR ────────────────────────────────────────────────────────────
+function runZinssimulator(folgezins, useConstantRate=false){
+  // Simulation: bis Fixende 3.75%, danach folgezins
+  // useConstantRate=true: kein Zinsbruch, gleicher Satz durchgehend (für Vergleichsbasis)
+  const orig2 = state.interestRate2;
+  const origFixed = state.fixedRateUntil;
+  const origRate  = state.interestRate;
+  if(useConstantRate){
+    // Vergleichsbasis: konstanter Fixzins ohne Bruch
+    state.interestRate2  = folgezins;
+    state.interestRate   = folgezins;
+    state.fixedRateUntil = ''; // kein Bruch
+  } else {
+    state.interestRate2 = folgezins;
+    if(!state.fixedRateUntil) state.fixedRateUntil = '2029-12-31';
+  }
+
+  // Simuliere mit 25 Jahren Horizont
+  const origYears = state.years;
+  state.years = 25;
+  const rows = buildPlan();
+  state.years = origYears;
+  state.interestRate2  = orig2;
+  state.fixedRateUntil = origFixed;
+  state.interestRate   = origRate;
+
+  const future = rows.filter(r => !r.is2025 && r.isQ);
+  const freeRow = future.find(r => r.end <= 0);
+  const totalInterest = round2(future.reduce((s,r)=>s+r.interest,0));
+  const totalFee = round2(future.reduce((s,r)=>s+r.fee,0));
+  return {
+    endDate: freeRow ? freeRow.to : null,
+    totalInterest, totalFee,
+    totalCost: round2(totalInterest + totalFee)
+  };
+}
+
+function renderZinssimulator(){
+  const slider = qs('#zinssimSlider');
+  const label  = qs('#zinssimLabel');
+  const result = qs('#zinssimResult');
+  if(!slider || !result) return;
+
+  // Basis: aktueller Folgezins aus state
+  slider.value = (state.interestRate2 || 0.0375) * 100;
+
+  function update(){
+    const pct = parseFloat(slider.value);
+    label.textContent = pct.toLocaleString('de-AT', {minimumFractionDigits:2}) + ' %';
+
+    const sim    = runZinssimulator(pct / 100);
+    const base   = runZinssimulator(state.interestRate || 0.0375, true); // Vergleichsbasis: konstanter Fixzins
+    const mehrkost = round2(sim.totalCost - base.totalCost);
+    const isTeurer = mehrkost > 0;
+
+    const endStr = sim.endDate ? dFmt.format(sim.endDate) : '> 25 J.';
+    const baseEnd = base.endDate ? dFmt.format(base.endDate) : '> 25 J.';
+
+    result.innerHTML = `
+      <div class="zinssim-row"><span>Folgezins ab 01.01.2030</span><span>${pct.toLocaleString('de-AT',{minimumFractionDigits:2})} %</span></div>
+      <div class="zinssim-row"><span>Schuldenfrei am</span><span>${endStr}</span></div>
+      <div class="zinssim-row"><span>Gesamtzinsen</span><span>${eur.format(sim.totalInterest)}</span></div>
+      <div class="zinssim-row"><span>Gebühren gesamt</span><span>${eur.format(sim.totalFee)}</span></div>
+      <div class="zinssim-row ${isTeurer?'highlight':'ok'}">
+        <span>${isTeurer ? '⚠ Mehrkosten vs. 3,75 %' : '✓ Ersparnis vs. 3,75 %'}</span>
+        <span>${isTeurer ? '+' : '−'}${eur.format(Math.abs(mehrkost))}</span>
+      </div>
+      <div class="zinssim-row" style="font-size:var(--text-xs);color:var(--color-text-muted)">
+        <span>Vergleichsbasis (3,75 %)</span><span>${baseEnd} · ${eur.format(base.totalCost)}</span>
+      </div>`;
+  }
+
+  slider.addEventListener('input', update);
+  update();
+}
+
+// ── EIGENES CONFIRM-MODAL ─────────────────────────────────────────────────────
+// Verwendung: confirmModal('Titel', 'Nachricht', 'OK-Label').then(ok => { if(ok) ... })
+function confirmModal(title, msg, okLabel='Bestätigen', okClass='danger-btn'){
+  return new Promise(resolve => {
+    const overlay = qs('#confirmOverlay');
+    qs('#confirmTitle').textContent = title;
+    qs('#confirmMsg').textContent   = msg;
+    const okBtn = qs('#confirmOk');
+    okBtn.textContent = okLabel;
+    okBtn.className   = 'btn ' + okClass;
+    overlay.classList.add('open');
+    // Focus-Trap: Cancel-Button
+    qs('#confirmCancel').focus();
+    const close = (result) => {
+      overlay.classList.remove('open');
+      resolve(result);
+    };
+    // Event-Handler: einmalig
+    const onOk     = () => { cleanup(); close(true);  };
+    const onCancel = () => { cleanup(); close(false); };
+    const onKey    = e => { if(e.key==='Escape'){ cleanup(); close(false); }};
+    const onBg     = e => { if(e.target===overlay){ cleanup(); close(false); }};
+    function cleanup(){
+      okBtn.removeEventListener('click', onOk);
+      qs('#confirmCancel').removeEventListener('click', onCancel);
+      document.removeEventListener('keydown', onKey);
+      overlay.removeEventListener('click', onBg);
+    }
+    okBtn.addEventListener('click', onOk);
+    qs('#confirmCancel').addEventListener('click', onCancel);
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('click', onBg);
+  });
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+const wasLoaded=loadFromStorage();
+renderStatement();
+renderSpecials();
+wireInputs();
+setupNav();
+setupTheme();
+recompute();
+if(wasLoaded) toast('Einstellungen wiederhergestellt ✓','ok',2500);
+
+qs('#addSpecial').addEventListener('click',()=>{
+  state.specialPayments.push({date:'2026-12-15',amount:0,note:''});
+  renderSpecials(); scheduleRecompute(); saveToStorage(true);
+});
+qs('#recalcAll').addEventListener('click',()=>{recompute();toast('Neu berechnet ✓');});
+qs('#manualSave').addEventListener('click',()=>saveToStorage(false));
+qs('#exportJson').addEventListener('click',exportJson);
+qs('#importFile').addEventListener('change',e=>{if(e.target.files[0])importJson(e.target.files[0]);});
+qs('#clearStorage').addEventListener('click',async ()=>{
+  const ok=await confirmModal('Lokale Daten löschen?','Alle gespeicherten Einstellungen werden unwiderruflich gelöscht. Fortfahren?','Löschen');
+  if(!ok) return;
+  localStorage.removeItem(STORAGE_KEY);
+  state=JSON.parse(JSON.stringify(DEFAULT_STATE));
+  wireInputs(); renderSpecials(); recompute();
+  qs('#saveTime').textContent='Nie gespeichert';
+  const d=qs('#lastSavedDisplay'); if(d) d.value='';
+  toast('Lokale Daten gelöscht','warn');
+});
+qs('#jump2026').addEventListener('click',()=>{
+  const rows=qsa('#planBody tr');
+  const r=rows.find(r=>r.cells[0]&&r.cells[0].textContent.includes('2026'));
+  if(r) r.scrollIntoView({behavior:'smooth',block:'center'});
+});
+
+// ── TEST-ZINSRECHNER ─────────────────────────────────────────────────────────
+(function(){
+  const today = new Date();
+  const fmt = d => d.toISOString().slice(0,10);
+  const qS = new Date(today.getFullYear(), Math.floor(today.getMonth()/3)*3, 1);
+  document.getElementById('testVon').value = fmt(qS);
+  document.getElementById('testBis').value = fmt(today);
+
+  document.getElementById('testCalcBtn').addEventListener('click', function(){
+    const K  = parseFloat(document.getElementById('testKapital').value) || 0;
+    const z  = parseFloat(document.getElementById('testZins').value) / 100 || 0;
+    const v  = new Date(document.getElementById('testVon').value + 'T00:00:00');
+    const b  = new Date(document.getElementById('testBis').value + 'T00:00:00');
+    const div= parseInt(document.getElementById('testModus').value);
+
+    if(!K || !z || isNaN(v) || isNaN(b) || b <= v){
+      toast('Bitte gültige Werte eingeben (Bis > Von)', 'warn'); return;
+    }
+
+    let tage, zinsen;
+    if(div === 30){
+      // 30/360: vereinfacht 3 Monate
+      const monate = (b.getFullYear()-v.getFullYear())*12 + (b.getMonth()-v.getMonth())
+                   + (b.getDate()-v.getDate())/30;
+      tage = Math.round(monate * 30);
+      zinsen = Math.round((K * z / 12 * monate) * 100) / 100;
+    } else {
+      tage = Math.max(0, Math.round((b - v) / (1000*60*60*24)));
+      zinsen = Math.round((K * z * tage / div) * 100) / 100;
+    }
+
+    const tagesZins = tage > 0 ? Math.round(zinsen / tage * 100) / 100 : 0;
+    const endbetrag = Math.round((K + zinsen) * 100) / 100;
+
+    const eurFmt = n => n.toLocaleString('de-AT', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('testTage').textContent       = tage + ' Tage';
+    document.getElementById('testZinsenEur').textContent  = '€ ' + eurFmt(zinsen);
+    document.getElementById('testTagesZins').textContent  = '€ ' + eurFmt(tagesZins);
+    document.getElementById('testEndbetrag').textContent  = '€ ' + eurFmt(endbetrag);
+    document.getElementById('testFormel').textContent =
+      `Formel: ${eurFmt(K)} × ${(z*100).toFixed(3)} % × ${tage} / ${div} = € ${eurFmt(zinsen)}`;
+    document.getElementById('testResult').style.display = '';
+  });
+})();
+</script>
+</body>
+</html>
