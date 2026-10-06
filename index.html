@@ -6,8 +6,10 @@
   <title>Kreditrechner – Allgemeiner Annuitätenkreditrechner v4.2.2</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
-  <!-- Offline-Betrieb: chart.umd.min.js lokal speichern, src="./chart.umd.min.js" setzen -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" onerror="document.body.insertAdjacentHTML('afterbegin','<div id=\"chartWarn\" style=\"position:fixed;top:0;left:0;right:0;background:#964219;color:#fff;padding:.5rem 1rem;font-size:.85rem;z-index:9999;text-align:center\">&#9888; Chart.js nicht geladen (kein Internet). Charts nicht verfügbar. Für Offline: chart.umd.min.js lokal einbinden.</div>')"></script>
+  <!-- Chart.js 4.4.4 lokal (vendor/), Fallback auf CDN falls die Datei fehlt -->
+  <script src="vendor/chart.umd.js"></script>
+  <script>if(!window.Chart) document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"><\/script>');</script>
+  <script>window.addEventListener('DOMContentLoaded',()=>{ if(!window.Chart){ document.body.insertAdjacentHTML('afterbegin','<div id=\"chartWarn\" style=\"position:fixed;top:0;left:0;right:0;background:#964219;color:#fff;padding:.5rem 1rem;font-size:.85rem;z-index:9999;text-align:center\">&#9888; Chart.js nicht geladen (kein Internet). Charts nicht verfügbar. Für Offline: chart.umd.min.js lokal einbinden.</div>') } });</script>
   <style>
     :root,[data-theme="light"]{
       --text-xs:clamp(.75rem,.7rem + .25vw,.875rem);--text-sm:clamp(.875rem,.8rem + .35vw,1rem);
@@ -400,7 +402,7 @@
           <div class="form-grid">
             <div class="field"><label>Planstart (Zinslauf ab diesem Tag)</label><input id="planStart" type="date"></div>
             <div class="field"><label>Startsaldo am Planstart</label><input id="startBalance" type="number" step="0.01"></div>
-            <div class="field"><label>Fixzins p.a. (dezimal)</label><input id="interestRate" type="number" step="0.0001"></div>
+            <div class="field"><label>Fixzins p.a. (%)</label><input id="interestRate" type="number" step="0.01" min="0" inputmode="decimal"></div>
             <div class="field"><label>Monatsrate</label><input id="monthlyRate" type="number" step="0.01"></div>
             <div class="field"><label>Zahlungstag (Standard: 7)</label><input id="paymentDay" type="number" min="1" max="28" step="1"></div>
             <div class="field"><label>Quartalsgebühr <span style="font-weight:400;text-transform:none;color:var(--color-text-faint)">KV-Schätzung +3 % p.a.</span></label><input id="quarterFee" type="number" step="0.01"></div>
@@ -414,7 +416,7 @@
             </div>
             <div class="field"><label>Sondertilgungslimit p.a. (0 = unbegrenzt)</label><input id="specialLimit" type="number" step="0.01" min="0"></div>
             <div class="field"><label>Fixzins-Ende <span style="font-weight:400;text-transform:none;color:var(--color-text-faint)">letzter Tag Fixperiode</span></label><input id="fixedRateUntil" type="date"></div>
-            <div class="field"><label>Folgezins p.a. (dezimal) <span style="font-weight:400;text-transform:none;color:var(--color-text-faint)">ab Folgetag</span></label><input id="interestRate2" type="number" step="0.0001" min="0"></div>
+            <div class="field"><label>Folgezins p.a. (%) <span style="font-weight:400;text-transform:none;color:var(--color-text-faint)">ab Folgetag</span></label><input id="interestRate2" type="number" step="0.01" min="0" inputmode="decimal"></div>
           </div>
           <div class="effzins-row">
             <div class="effzins-item"><small>Nominalzins p.a.</small><strong id="effNominal">–</strong></div>
@@ -841,8 +843,8 @@ function buildFullPlan(overrides={}){
   Object.assign(tmp, overrides, {years: FULL_TERM_YEARS});
   return runWithState(tmp, buildPlan);
 }
-const sumInterest = rows => round2(rows.filter(r=>r.isQ).reduce((s,r)=>s+r.interest,0));
-const payoffOf = rows => { const r = rows.find(x=>x.isQ && x.end<=0); return r ? (r.payoffDate || r.to) : null; };
+function sumInterest(rows){ return round2(rows.filter(r=>r.isQ).reduce((s,r)=>s+r.interest,0)); }
+function payoffOf(rows){ const r = rows.find(x=>x.isQ && x.end<=0); return r ? (r.payoffDate || r.to) : null; }
 
 // Effektivzins: XIRR (act/365) über alle tatsächlichen Zahlungen ohne Sondertilgungen
 // bis zur vollständigen Tilgung; offene Restschuld als Schluss-Cashflow.
@@ -957,6 +959,7 @@ const markerPlugin = {
 };
 
 function renderCharts(rows){
+  if(!window.Chart) return; // ohne Chart.js weiterrechnen, nur keine Diagramme
   const qRows = rows.filter(r => r.isQ); // nur Quartalsabschlüsse
   const ohne = runWithState(Object.assign(cloneState(state), {specialPayments: []}), buildPlan).filter(r => r.isQ);
   const axisRows = ohne.length > qRows.length ? ohne : qRows;
@@ -1166,12 +1169,14 @@ function renderSpecials(){
 // ── INPUTS VERDRAHTEN ────────────────────────────────────────────────────────
 const NUM_FIELDS={startBalance:'startBalance',interestRate:'interestRate',monthlyRate:'monthlyRate',
   paymentDay:'paymentDay',quarterFee:'quarterFee',years:'years',specialLimit:'specialLimit',interestRate2:'interestRate2'};
+const PCT_FIELDS=new Set(['interestRate','interestRate2']); // Eingabe in %, intern dezimal
+const round6 = n => Math.round(n*1e6)/1e6;
 let _inputsWired=false;
 function wireInputs(){
   // Werte immer setzen, Listener nur einmal registrieren
   const elPS=qs('#planStart'), elMode=qs('#calcMode'), elFix=qs('#fixedRateUntil');
   elPS.value=state.planStart||'2026-01-01';
-  Object.entries(NUM_FIELDS).forEach(([id,key])=>{ const el=qs('#'+id); if(el) el.value=state[key]; });
+  Object.entries(NUM_FIELDS).forEach(([id,key])=>{ const el=qs('#'+id); if(el) el.value=PCT_FIELDS.has(key) ? +(state[key]*100).toFixed(4) : state[key]; });
   elMode.value=state.calcMode;
   elFix.value=state.fixedRateUntil||'';
   if(_inputsWired) return;
@@ -1180,7 +1185,7 @@ function wireInputs(){
   Object.entries(NUM_FIELDS).forEach(([id,key])=>{
     const el=qs('#'+id); if(!el) return;
     el.addEventListener('input',()=>{
-      state[key]=Number(el.value||0);
+      state[key]=PCT_FIELDS.has(key) ? round6(Number(el.value||0)/100) : Number(el.value||0);
       updateInputSummaryCards();
       scheduleRecompute(); saveToStorage(true);
     });
@@ -1400,11 +1405,10 @@ function validateInputs(){
     errors.push('Planstart muss ein gültiges Datum sein (z.B. 2026-01-01).');
   if(!state.startBalance||state.startBalance<=0)
     errors.push('Startsaldo muss größer als 0 sein.');
-  const decHint = v => v>=1 ? ` Bitte dezimal eingeben: 3,75\u202f% = 0.0375 (eingegeben: ${v}).` : '';
   if(!state.interestRate||state.interestRate<=0||state.interestRate>0.25)
-    errors.push('Zinssatz muss zwischen 0,01\u202f% und 25,00\u202f% liegen.'+decHint(state.interestRate));
+    errors.push('Zinssatz muss zwischen 0,01\u202f% und 25,00\u202f% liegen.');
   if(state.interestRate2 && (state.interestRate2<=0||state.interestRate2>0.25))
-    errors.push('Folgezins muss zwischen 0,01\u202f% und 25,00\u202f% liegen.'+decHint(state.interestRate2));
+    errors.push('Folgezins muss zwischen 0,01\u202f% und 25,00\u202f% liegen.');
   if(!state.monthlyRate||state.monthlyRate<=0)
     errors.push('Monatsrate muss größer als 0 sein.');
   else if(state.startBalance>0){

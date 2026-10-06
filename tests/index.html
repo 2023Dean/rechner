@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kreditrechner Rechentests</title>
+<style>
+  :root{--bg:#f7f6f2;--text:#28251d;--muted:#6e6b65;--ok:#437a22;--fail:#b23a57;--card:#fbfbf9;--border:#d4d1ca}
+  @media (prefers-color-scheme: dark){:root{--bg:#171614;--text:#e8e6e1;--muted:#a19f99;--ok:#7fbf55;--fail:#e26d8a;--card:#1f1e1b;--border:#3a3833}}
+  body{margin:0;padding:16px;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--text)}
+  main{max-width:960px;margin:0 auto}
+  h1{font-size:1.4rem;margin:.2rem 0}
+  #summary{font-weight:700;font-size:1.1rem;margin:.6rem 0 1rem}
+  .ok{color:var(--ok)} .fail{color:var(--fail)}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--border)}
+  td,th{padding:.4rem .6rem;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
+  td.detail{color:var(--muted);font-size:.85rem;word-break:break-word}
+  iframe{display:none}
+  pre{white-space:pre-wrap;font-size:.75rem;background:var(--card);border:1px solid var(--border);padding:.6rem}
+  .note{color:var(--muted);font-size:.85rem}
+</style>
+</head>
+<body>
+<main>
+  <h1>Kreditrechner – Rechentests</h1>
+  <p class="note">Lädt <code>../index.html</code> unsichtbar und prüft den Rechenkern gegen Referenzwerte und Rechenregeln. Deine gespeicherten Eingaben werden dabei nicht verändert.</p>
+  <div id="summary">Tests laufen …</div>
+  <table><thead><tr><th>Test</th><th>Ergebnis</th><th>Details</th></tr></thead><tbody id="results"></tbody></table>
+  <pre id="golden" hidden></pre>
+</main>
+<iframe id="app" src="../index.html" title="Rechner"></iframe>
+<script>
+// Referenzszenarien. Die Quartalswerte (EXPECTED) stammen aus v4.2.2 und wurden
+// zuvor gegen eine unabhängige Python-Nachrechnung (act/360, Quartalskapitalisierung) geprüft.
+const BASE = {planStart:'2026-01-01',startBalance:104250,interestRate:0.0375,interestRate2:0.0375,fixedRateUntil:'2029-12-31',
+  monthlyRate:831.05,paymentDay:7,quarterFee:0,years:10,calcMode:'daily_360',specialLimit:0,
+  specialPayments:[
+    {date:'2026-03-13',amount:5000,note:''},{date:'2026-03-23',amount:5000,note:''},{date:'2026-06-08',amount:5000,note:''},
+    {date:'2026-09-25',amount:5000,note:''},{date:'2027-01-05',amount:5000,note:''},{date:'2027-07-01',amount:5000,note:''}]};
+const SCENARIOS = {
+  standard:        {...BASE},
+  zinsbruch_gebuehr:{...BASE, fixedRateUntil:'2027-05-14', interestRate2:0.05, quarterFee:15},
+  act365_tag28:    {...BASE, calcMode:'daily_365', paymentDay:28},
+  monatlich:       {...BASE, calcMode:'monthly'},
+  planstart_mitte: {...BASE, planStart:'2026-02-15', specialPayments:[]},
+  tilgung_im_q:    {...BASE, startBalance:6000, specialPayments:[]},
+  sonder_zu_gross: {...BASE, startBalance:20000, specialPayments:[{date:'2026-05-10',amount:50000,note:''}]},
+};
+const EXPECTED = /*GOLDEN*/{"standard": {"quarters": [[949.08, 0, 92705.93], [852.69, 0, 86065.47], [807.39, 0, 79379.71], [746.53, 0, 77633.09], [669.17, 0, 70809.11], [657.01, 0, 68972.97], [598.96, 0, 62078.78], [580.64, 0, 60166.27], [556.13, 0, 58229.25], [537.85, 0, 56273.95], [525.01, 0, 54305.81], [506.23, 0, 52318.89], [476.55, 0, 50302.29], [462.8, 0, 48271.94], [448.5, 0, 46227.29], [428.73, 0, 44162.87], [400, 0, 42069.72], [384.68, 0, 39961.25], [368.94, 0, 37837.04], [348.41, 0, 35692.3], [320.59, 0, 33519.74], [303.72, 0, 31330.31], [286.05, 0, 29123.21], [264.81, 0, 26894.87], [241, 0, 24642.72], [219.4, 0, 22368.97], [200.26, 0, 20076.08], [178.11, 0, 17761.04], [152.49, 0, 15420.38], [132.15, 0, 13059.38], [110.96, 0, 10677.19], [87.95, 0, 8271.99], [63.7, 0, 5842.54], [41.27, 0, 3390.66], [18.21, 0, 915.72], [1.02, 0, 0]], "eff": 0.038565, "saving": 14364.35, "saldo_2027_08_01": 63141.92}, "zinsbruch_gebuehr": {"quarters": [[949.08, 15, 92720.93], [852.83, 15, 86095.61], [807.67, 15, 79425.13], [746.96, 15, 77693.94], [669.74, 15.45, 70885.98], [770.02, 15.45, 69178.3], [801.24, 15.45, 62501.84], [779.59, 15.45, 60803.73], [749.56, 15.91, 59076.05], [727.84, 15.91, 57326.65], [713.46, 15.91, 55562.87], [691.04, 15.91, 53776.67], [653.63, 16.39, 51953.54], [637.94, 16.39, 50114.72], [621.54, 16.39, 48259.5], [597.6, 16.39, 46380.34], [561.06, 16.88, 44465.13], [543.18, 16.88, 42532.04], [524.77, 16.88, 40580.54], [499.6, 16.88, 38603.87], [463.85, 17.39, 36591.96], [443.78, 17.39, 34559.98], [422.67, 17.39, 32506.89], [396.32, 17.39, 30427.45], [365.99, 17.91, 28318.2], [338.98, 17.91, 26181.94], [315.73, 17.91, 24022.43], [287.91, 17.91, 21835.1], [254.24, 18.45, 19614.64], [229.21, 18.45, 17369.15], [203.01, 18.45, 15097.46], [173.75, 18.45, 12796.51], [141.49, 19, 10463.85], [113.44, 19, 8103.14], [84.5, 19, 5713.49], [54.08, 19, 3293.42], [22.58, 19.57, 842.42], [0.98, 19.57, 0]], "eff": 0.050231, "saving": 22341.53, "saldo_2027_08_01": 63347.25}, "act365_tag28": {"quarters": [[941.46, 0, 92698.31], [846.31, 0, 86051.47], [801.57, 0, 79359.89], [741.49, 0, 77608.23], [665.15, 0, 70780.23], [653.12, 0, 68940.2], [595.83, 0, 62042.88], [577.72, 0, 60127.45], [553.53, 0, 58187.83], [535.48, 0, 56230.16], [522.78, 0, 54259.79], [504.24, 0, 52270.88], [474.96, 0, 50252.69], [461.38, 0, 48220.92], [447.25, 0, 46175.02], [427.74, 0, 44109.61], [399.41, 0, 42015.87], [384.28, 0, 39907], [368.75, 0, 37782.6], [348.5, 0, 35637.95], [321.08, 0, 33465.88], [304.43, 0, 31277.16], [287.01, 0, 29071.02], [266.07, 0, 26843.94], [242.61, 0, 24593.4], [221.31, 0, 22321.56], [202.45, 0, 20030.86], [180.62, 0, 17718.33], [155.38, 0, 15380.56], [135.34, 0, 13022.75], [114.47, 0, 10644.07], [91.81, 0, 8242.73], [67.93, 0, 5817.51], [45.85, 0, 3370.21], [23.15, 0, 900.21], [2.89, 0, 0]], "eff": 0.038029, "saving": 14209.06, "saldo_2027_08_01": 63109.15}, "monatlich": {"quarters": [[969.55, 0, 92726.4], [861.52, 0, 86094.77], [799.35, 0, 79400.97], [736.59, 0, 77644.41], [688.88, 0, 70840.14], [656.34, 0, 69003.33], [607.87, 0, 62118.05], [574.57, 0, 60199.47], [556.58, 0, 58262.9], [538.42, 0, 56308.17], [520.1, 0, 54335.12], [501.6, 0, 52343.57], [482.93, 0, 50333.35], [464.08, 0, 48304.28], [445.06, 0, 46256.19], [425.86, 0, 44188.9], [406.48, 0, 42102.23], [386.92, 0, 39996], [367.17, 0, 37870.02], [347.24, 0, 35724.11], [327.12, 0, 33558.08], [306.82, 0, 31371.75], [286.32, 0, 29164.92], [265.63, 0, 26937.4], [244.75, 0, 24689], [223.67, 0, 22419.52], [202.39, 0, 20128.76], [180.92, 0, 17816.53], [159.24, 0, 15482.62], [137.36, 0, 13126.83], [115.27, 0, 10748.95], [92.98, 0, 8348.78], [70.48, 0, 5926.11], [47.77, 0, 3480.73], [24.84, 0, 1012.42], [3.73, 0, 0]], "eff": 0.038438, "saving": 14136.75, "saldo_2027_08_01": 63172.28}, "planstart_mitte": {"quarters": [[486.68, 0, 103905.63], [970.83, 0, 102383.31], [966.89, 0, 100857.05], [952.35, 0, 99316.25], [917.24, 0, 97740.34], [912.3, 0, 96159.49], [907.42, 0, 94573.76], [892.05, 0, 92972.66], [867.11, 0, 91346.62], [851.78, 0, 89705.25], [845.39, 0, 88057.49], [829.69, 0, 86394.03], [796.01, 0, 84696.89], [788.83, 0, 82992.57], [781.23, 0, 81280.65], [764.66, 0, 79552.16], [731.78, 0, 77790.79], [723.28, 0, 76020.92], [714.51, 0, 74242.28], [697.29, 0, 72446.42], [665.16, 0, 70618.43], [655.38, 0, 68780.66], [644.95, 0, 66932.46], [627.15, 0, 65066.46], [602.84, 0, 63176.15], [584.66, 0, 61267.66], [573.04, 0, 59347.55], [554.46, 0, 57408.86], [524.18, 0, 55439.89], [511.5, 0, 53458.24], [498.11, 0, 51463.2], [478.82, 0, 49448.87], [449.73, 0, 47405.45], [435.25, 0, 45347.55], [420.3, 0, 43274.7], [400.52, 0, 41182.07], [372.14, 0, 39061.06], [356.24, 0, 36924.15], [339.75, 0, 34770.75], [318.94, 0, 32596.54]], "eff": 0.038567, "saving": 0, "saldo_2027_08_01": 95328.44}, "tilgung_im_q": {"quarters": [[42.57, 0, 3549.42], [19.54, 0, 1075.81], [1.46, 0, 0]], "eff": 0.038543, "saving": 0, "saldo_2027_08_01": 0}, "sonder_zu_gross": {"quarters": [[173.82, 0, 17680.67], [68.71, 0, 0]], "eff": 0.038559, "saving": 535.68, "saldo_2027_08_01": 0}}/*END*/;
+
+const results = [];
+const near = (a,b,tol=0.005) => Math.abs(a-b) <= tol;
+const fmt = n => typeof n === 'number' ? n.toFixed(2) : String(n);
+function check(name, ok, detail=''){ results.push({name, ok:!!ok, detail}); }
+
+function run(w){
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const inState = (st, fn) => w.runWithState(clone(st), fn);
+  const golden = {};
+
+  for(const [key, st] of Object.entries(SCENARIOS)){
+    const rows = inState(st, () => w.buildPlan());
+    const q = rows.filter(r=>r.isQ);
+    const sum = k => rows.reduce((s,r)=>s+r[k],0);
+    const last = q[q.length-1];
+    const eff = inState(st, () => w.calcEffektivzins());
+    const saving = inState(st, () => w.sumInterest(w.buildFullPlan({specialPayments:[]})) - w.sumInterest(w.buildFullPlan()));
+    const saldo = inState(st, () => w.calcSaldoAtDate(new Date(2027,7,1), w.buildFullPlan()));
+    golden[key] = { quarters: q.map(r=>[r.interest, r.fee, r.end]), eff: Math.round(eff*1e6)/1e6, saving: Math.round(saving*100)/100, saldo_2027_08_01: saldo };
+
+    // Rechenregeln (unabhängig von Referenzwerten)
+    const ident = st.startBalance + sum('interest') + sum('fee') - sum('rates') - sum('special') - last.end;
+    check(`${key}: Summenidentität`, near(ident, 0, 0.011), `Start + Zinsen + Gebühren − Raten − Sonder − Endsaldo = ${fmt(ident)}`);
+    let chainOk = true; for(let i=1;i<rows.length;i++) if(!near(rows[i].begin, rows[i-1].end, 0.001)) chainOk = false;
+    check(`${key}: Salden lückenlos verkettet`, chainOk);
+    check(`${key}: keine negativen Werte`, !rows.some(r=>r.end<0||r.rates<0||r.special<0||r.interest<0));
+    check(`${key}: Sonder-Summen konsistent (Monate = Quartale)`, near(sum('special'), q.reduce((s,r)=>s+r.qSpecial,0), 0.001));
+    if(st.startBalance <= 20000) check(`${key}: Kredit getilgt, keine Überzahlung`, last.end === 0 && near(sum('rates')+sum('special'), st.startBalance + sum('interest') + sum('fee'), 0.011));
+
+    if(EXPECTED && EXPECTED[key]){
+      const ex = EXPECTED[key];
+      const diffs = [];
+      if(ex.quarters.length !== q.length) diffs.push(`Quartale ${q.length} statt ${ex.quarters.length}`);
+      ex.quarters.forEach((e,i)=>{ const r=q[i]; if(!r || !near(r.interest,e[0]) || !near(r.fee,e[1]) || !near(r.end,e[2])) diffs.push(`Q${i+1}: ist ${r?[r.interest,r.fee,r.end].map(fmt).join('/'):'–'} soll ${e.map(fmt).join('/')}`); });
+      check(`${key}: Quartale = Referenz`, !diffs.length, diffs.slice(0,3).join('; ') || `${q.length} Quartale centgenau`);
+      check(`${key}: Effektivzins = Referenz`, near(eff, ex.eff, 1e-5), `${(eff*100).toFixed(3)} % (Referenz ${(ex.eff*100).toFixed(3)} %)`);
+      check(`${key}: Zinsersparnis = Referenz`, near(saving, ex.saving), `${fmt(saving)} (Referenz ${fmt(ex.saving)})`);
+      check(`${key}: Stichtagssaldo = Referenz`, near(saldo, ex.saldo_2027_08_01), `${fmt(saldo)} (Referenz ${fmt(ex.saldo_2027_08_01)})`);
+    }
+  }
+
+  // Einzelne Regeln
+  const std = SCENARIOS.standard;
+  const eff0 = inState({...std, specialPayments:[]}, () => w.calcEffektivzins());
+  check('Effektivzins ohne Gebühren nicht auf ganze Prozent gerundet', Math.abs(eff0*100 - Math.round(eff0*100)) > 0.01 && eff0 > std.interestRate && eff0 < std.interestRate + 0.003, `${(eff0*100).toFixed(3)} % bei 3,75 % nominal`);
+  const kq = inState(std, () => w.buildPlan()).filter(r=>r.isQ);
+  check('Sondertilgung im 1. Quartalsmonat wird im Quartal gezählt', near(kq[4].qSpecial, 5000) && near(kq[6].qSpecial, 5000), `Q1 27: ${fmt(kq[4].qSpecial)}, Q3 27: ${fmt(kq[6].qSpecial)}`);
+  const mid = inState(SCENARIOS.planstart_mitte, () => w.buildPlan());
+  check('Planstart mitten im Quartal: keine Rate vor Planstart', mid[0].from.getDate() === 15 && near(mid.filter(r=>r.isQ)[0].rates, 831.05), `erste Zeile ab ${mid[0].from.toLocaleDateString('de-AT')}`);
+  const big = inState(SCENARIOS.sonder_zu_gross, () => w.buildPlan());
+  check('Sondertilgung über Restschuld wird gekappt', big.reduce((s,r)=>s+r.special,0) < 20000);
+
+  // Zielanalyse: übernommene Zusatz-Sondertilgungen erreichen das Ziel
+  const zSt = {...std, years: 8};
+  const z = inState(zSt, () => {
+    const res = w.calcRequiredAnnualSpecial(7);
+    if(!res.found || res.alreadyReached) return {skip:true, res};
+    const extra = w.zielExtraPayments(res.annualAmount, 7);
+    const rows = w.buildFullPlan({specialPayments: [...JSON.parse(JSON.stringify(zSt.specialPayments)), ...extra]});
+    return {payoff: w.payoffOf(rows), target: w.zielDate(7), amount: res.annualAmount, n: extra.length};
+  });
+  check('Zielanalyse: übernommener Plan erreicht das Zieldatum', z.skip || (z.payoff && z.payoff <= z.target),
+    z.skip ? 'Ziel ohne Zusatz erreichbar – übersprungen' : `${z.n}× ${fmt(z.amount)} → getilgt ${z.payoff.toLocaleDateString('de-AT')}, Ziel ${z.target.toLocaleDateString('de-AT')}`);
+
+  return golden;
+}
+
+function render(golden){
+  const pass = results.filter(r=>r.ok).length, fail = results.length - pass;
+  document.getElementById('results').innerHTML = results.map(r =>
+    `<tr><td>${r.name}</td><td class="${r.ok?'ok':'fail'}">${r.ok?'✓ bestanden':'✗ FEHLER'}</td><td class="detail">${r.detail}</td></tr>`).join('');
+  const s = document.getElementById('summary');
+  s.className = fail ? 'fail' : 'ok';
+  s.textContent = fail ? `${fail} von ${results.length} Tests fehlgeschlagen` : `Alle ${results.length} Tests bestanden ✓`;
+  if(!EXPECTED || location.search.includes('golden')){
+    const g = document.getElementById('golden'); g.hidden = false; g.textContent = JSON.stringify(golden);
+  }
+  window.__testResult = {pass, fail, total: results.length, results, golden};
+}
+
+document.getElementById('app').addEventListener('load', e => {
+  const w = e.target.contentWindow;
+  let golden = null;
+  try { golden = run(w); } catch(err){ check('Testlauf', false, err.message); }
+  render(golden);
+});
+</script>
+</body>
+</html>
