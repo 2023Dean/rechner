@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Kreditrechner – Allgemeiner Annuitätenkreditrechner v4.2.1</title>
+  <title>Kreditrechner – Allgemeiner Annuitätenkreditrechner v4.2.2</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
   <!-- Offline-Betrieb: chart.umd.min.js lokal speichern, src="./chart.umd.min.js" setzen -->
@@ -61,6 +61,9 @@
     .btn svg{width:16px;height:16px}
     .icon-btn{width:44px;height:44px;border-radius:var(--radius-md);border:1px solid rgba(40,37,29,.12);display:grid;place-items:center;background:var(--color-surface)}
     .stack{display:grid;gap:var(--space-6)}
+    [hidden]{display:none!important}
+    .stack>*,.hero>*,.stats>*,.grid-2>*,.split>*,.form-grid>*,.stats .stat{min-width:0}
+    .stat strong{overflow-wrap:anywhere}
     .hero{display:grid;grid-template-columns:1.4fr .9fr;gap:var(--space-6)}
     .card{background:var(--color-surface);border:1px solid rgba(40,37,29,.12);border-radius:var(--radius-xl);padding:var(--space-6);box-shadow:var(--shadow-sm)}
     .card h3{font-size:var(--text-lg);font-weight:800;margin-bottom:var(--space-2)}
@@ -327,7 +330,7 @@
       <section class="hero tab-panel" id="panel-dashboard">
         <article class="card">
           <div class="section-title">
-            <div><span class="tag">v4.2.1 – Allgemeiner Kreditrechner</span><h3>Annuitätenkreditrechner</h3></div>
+            <div><span class="tag">v4.2.2 – Allgemeiner Kreditrechner</span><h3>Annuitätenkreditrechner</h3></div>
             <span class="accuracy-badge">✓ Banknahe Zinslogik</span>
           </div>
           <p>Quartalsweise Zinsabrechnung (1. bis letzter Quartalstag), konfigurierbarer Zahlungstag mit Wochenendregel, optionale Quartalsgebühr. Sondertilgungen ab Valutadatum zinssenkend. Optionaler Folgezins nach Fixzinsende konfigurierbar.</p>
@@ -390,7 +393,7 @@
         <article class="card stack">
           <div class="section-title"><h3>Rechnerparameter</h3><span class="tag">Banknahe Einstellungen</span></div>
           <div class="form-grid">
-            <div class="field"><label>Planstart (1. Tag eines Quartals)</label><input id="planStart" type="date"></div>
+            <div class="field"><label>Planstart (Zinslauf ab diesem Tag)</label><input id="planStart" type="date"></div>
             <div class="field"><label>Startsaldo am Planstart</label><input id="startBalance" type="number" step="0.01"></div>
             <div class="field"><label>Fixzins p.a. (dezimal)</label><input id="interestRate" type="number" step="0.0001"></div>
             <div class="field"><label>Monatsrate</label><input id="monthlyRate" type="number" step="0.01"></div>
@@ -415,8 +418,8 @@
             <div class="effzins-item"><small>Schuldenfrei am</small><strong id="effDebtFree">–</strong></div>
           </div>
           <div class="note ok">
-            <strong>Banknahe Kalibrierung v4.2.1:</strong> Zinslauf 1. bis letzter Quartalstag inkl. · Zahlungstag 7, Wochenendregel · Gebühr KV-gekoppelt +3 % p.a. · Valutadatum maßgeblich. <strong>Zinsbruch:</strong> Taggenau ab Fixzins-Ende – Folgezins ab Folgetag konfigurierbar.<br>
-            <span style="font-size:var(--text-xs);margin-top:.3rem;display:block">* Effektivzins: IRR-Methode, Quartalsbasis (^4 annualisiert), ohne Sondertilgungen, mit steigender Gebühr. Höher als Nominalzins wenn Gebühren > 0. Im Tilgungsplan markiert ⚡ die Quartalszelle des Zinsbruchs (sofern Fixzinsende definiert).</span>
+            <strong>Banknahe Kalibrierung:</strong> Zinslauf 1. bis letzter Quartalstag inkl. (im ersten Quartal ab Planstart) · konfigurierbarer Zahlungstag mit Wochenendregel · Gebühr KV-gekoppelt +3 % p.a. · Valutadatum maßgeblich. <strong>Zinsbruch:</strong> Taggenau ab Fixzins-Ende – Folgezins ab Folgetag konfigurierbar.<br>
+            <span style="font-size:var(--text-xs);margin-top:.3rem;display:block">* Effektivzins: interner Zinsfuß (XIRR, act/365) aller Zahlungen zu ihren tatsächlichen Terminen bis zur vollständigen Tilgung – ohne Sondertilgungen, inkl. Gebühren und Folgezins. Durch die quartalsweise Zinskapitalisierung liegt er etwas über dem Nominalzins. Im Tilgungsplan markiert ⚡ die Quartalszelle des Zinsbruchs (sofern Fixzinsende definiert).</span>
           </div>
           <div id="limitWarningRechner"></div>
         </article>
@@ -501,7 +504,7 @@
               <thead><tr>
                 <th>Jahr</th><th>Anfangssaldo</th><th>Regelraten</th>
                 <th>Sondertilgungen</th><th>Zinsen</th><th>Gebühren</th>
-                <th>Tilgung gesamt</th><th>Endsaldo</th>
+                <th>Tilgung (Schuldabbau)</th><th>Endsaldo</th>
               </tr></thead>
               <tbody id="jahresBody"></tbody>
             </table>
@@ -675,40 +678,18 @@ function rateForDate(d){
   return d <= cutoff ? state.interestRate : (state.interestRate2 || state.interestRate);
 }
 
-// ── ZINSBERECHNUNG (taggenau, ab Quartalsbeginn, Zinsbruch-fähig) ────────────
-function calcInterest(begin, events, qStart, qEnd){
-  const mode = state.calcMode;
-  if(mode === 'monthly'){
-    // Vereinfacht: Quartalsmittelzins
-    const midDate = new Date((qStart.getTime() + qEnd.getTime()) / 2);
-    return round2(begin * rateForDate(midDate) / 12 * 3);
-  }
-  const divisor = mode === 'daily_365' ? 365 : 360;
+// ── HILFSFUNKTIONEN ──────────────────────────────────────────────────────────
+const localDateStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const escHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const isValidIsoDate = s => typeof s==='string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && localDateStr(toDate(s))===s;
+const planStartDate = () => toDate(state.planStart || '2026-01-01');
+const FULL_TERM_YEARS = 60;
 
-  // Zinsbruch-Datum: wenn innerhalb des Quartals, als Extra-Event einfügen
-  let allEvents = [...events];
-  if(state.fixedRateUntil){
-    const cutoff = toDate(state.fixedRateUntil);
-    const breakDay = addDays(cutoff, 1); // erster Tag mit neuem Zins
-    if(breakDay >= qStart && breakDay <= qEnd){
-      // Dummy-Event mit amount=0: Zins ändert sich, Saldo nicht
-      allEvents.push({date:breakDay, amount:0, isRateBreak:true});
-      allEvents.sort((a,b)=>a.date-b.date);
-    }
-  }
-
-  let running = begin, cursor = qStart, total = 0;
-  for(const ev of allEvents){
-    const d = daysBetween(cursor, ev.date);
-    total += running * rateForDate(cursor) * d / divisor;
-    if(!ev.isRateBreak) running -= ev.amount;
-    if(running < 0) running = 0;
-    cursor = ev.date;
-  }
-  // Rest bis Quartalsende inklusiv
-  const d = daysBetween(cursor, qEnd) + 1;
-  total += running * rateForDate(cursor) * d / divisor;
-  return round2(total);
+// Quartalsgebühr mit +3 % p.a. ab jedem vollen Vertragsjahr seit Planstart
+function feeFor(qStart){
+  const ps = planStartDate();
+  const months = (qStart.getFullYear()-ps.getFullYear())*12 + qStart.getMonth()-ps.getMonth();
+  return round2((Number(state.quarterFee)||0) * Math.pow(1.03, Math.max(0, Math.floor(months/12))));
 }
 
 // ── SONDERTILGUNGEN ──────────────────────────────────────────────────────────
@@ -719,227 +700,200 @@ function specialsInRange(from, to){
 }
 
 // ── QUARTAL BERECHNEN ────────────────────────────────────────────────────────
-function calcQuarterRow(qStart, qEnd, begin){
-  // Regelraten: Zahlungstag in jedem Monat des Quartals
-  const payDates = [];
-  let m = new Date(qStart.getFullYear(), qStart.getMonth(), 1);
-  while(m <= qEnd){
-    payDates.push(paymentDateFor(m.getFullYear(), m.getMonth()));
-    m = new Date(m.getFullYear(), m.getMonth()+1, 1);
+// Zinslauf ab max(Quartalsbeginn, Planstart) bis Quartalsende inkl.; Zahlungen werden
+// auf die Restschuld gekappt; wird der Kredit im Quartal getilgt, werden die offenen
+// Quartalszinsen + Gebühr als Schlusszahlung am Quartalsende gebucht.
+function calcQuarterRow(qStart, qEnd, begin, periodStart){
+  const pStart = periodStart && periodStart > qStart ? periodStart : qStart;
+  const events = [];
+  for(let i=0;i<3;i++){
+    const mo = new Date(qStart.getFullYear(), qStart.getMonth()+i, 1);
+    const d = paymentDateFor(mo.getFullYear(), mo.getMonth());
+    if(d >= pStart) events.push({date:d, amount:Number(state.monthlyRate)||0, kind:'rate', month:mo.getMonth()});
   }
+  specialsInRange(pStart, qEnd).forEach(p => {
+    const d = toDate(p.date);
+    events.push({date:d, amount:Math.max(0, Number(p.amount)||0), kind:'special', month:d.getMonth()});
+  });
+  events.sort((a,b)=>(a.date-b.date) || (a.kind==='rate' ? -1 : 1));
 
-  const specials = specialsInRange(qStart, qEnd);
-  const specialSum = round2(specials.reduce((s,p)=>s+Number(p.amount||0),0));
-
-  // Alle Events (Raten + Sonder) sortiert für Zinsberechnung
-  const events = [
-    ...payDates.map(d=>({date:d, amount:state.monthlyRate})),
-    ...specials.map(p=>({date:toDate(p.date), amount:Number(p.amount||0)}))
-  ].sort((a,b)=>a.date-b.date);
-
-  const feeGrowthRate = 0.03; // KV-gekoppelt +3% p.a.
-  const startYear = toDate(state.planStart || '2026-01-01').getFullYear();
-  const yearOffset = qStart.getFullYear() - startYear;
-  const fee = round2(state.quarterFee * Math.pow(1 + feeGrowthRate, yearOffset));
-  const interest = calcInterest(begin, events, qStart, qEnd);
-  const totalRates = round2(state.monthlyRate * payDates.length);
-  const end = round2(Math.max(0, begin + interest + fee - totalRates - specialSum));
-
-  // Zinsbruch: trifft dieses Quartal die Grenze, ODER beginnt es bereits mit Rate2?
+  const mode = state.calcMode;
+  const divisor = mode==='daily_365' ? 365 : 360;
   const cutoff = state.fixedRateUntil ? toDate(state.fixedRateUntil) : null;
-  const isRateBreak = cutoff && (
-    (cutoff >= qStart && cutoff <= qEnd) ||          // Bruch liegt IM Quartal
-    (addDays(cutoff,1).getTime() === qStart.getTime()) // Bruch war letzter Tag VOR diesem Quartal
+  const breakDay = cutoff ? addDays(cutoff,1) : null;
+  let principal = round2(begin), cursor = pStart, interest = 0, payoffDate = null;
+  const accrue = to => { // Zinsen für die Tage [cursor, to)
+    if(mode==='monthly') return;
+    if(breakDay && breakDay > cursor && breakDay < to){
+      interest += principal*rateForDate(cursor)*daysBetween(cursor,breakDay)/divisor;
+      interest += principal*rateForDate(breakDay)*daysBetween(breakDay,to)/divisor;
+    } else {
+      interest += principal*rateForDate(cursor)*daysBetween(cursor,to)/divisor;
+    }
+    cursor = to;
+  };
+  const bookings = [];
+  for(const ev of events){
+    accrue(ev.date);
+    const booked = round2(Math.min(ev.amount, Math.max(0, principal)));
+    const wasOpen = principal > 0;
+    principal = round2(principal - booked);
+    if(wasOpen && principal <= 0) payoffDate = ev.date;
+    bookings.push({...ev, amount:booked, requested:ev.amount});
+  }
+  accrue(addDays(qEnd,1));
+
+  if(mode==='monthly'){
+    // Monatszins auf den Saldo zu Monatsbeginn (anteilig im Startmonat)
+    for(let i=0;i<3;i++){
+      const mS = new Date(qStart.getFullYear(), qStart.getMonth()+i, 1);
+      const mE = new Date(mS.getFullYear(), mS.getMonth()+1, 0);
+      if(mE < pStart) continue;
+      const from = mS < pStart ? pStart : mS;
+      const bal = round2(begin - bookings.filter(b=>b.date < from).reduce((s,b)=>s+b.amount,0));
+      interest += Math.max(0,bal) * rateForDate(from)/12 * (daysBetween(from, mE)+1)/mE.getDate();
+    }
+  }
+  interest = round2(interest);
+  const fee = feeFor(qStart);
+  let end = round2(principal + interest + fee);
+  if(payoffDate){
+    bookings.push({date:qEnd, amount:end, requested:end, kind:'rate', month:qEnd.getMonth(), closing:true});
+    end = 0;
+  }
+  const rates   = round2(bookings.filter(b=>b.kind==='rate').reduce((s,b)=>s+b.amount,0));
+  const special = round2(bookings.filter(b=>b.kind==='special').reduce((s,b)=>s+b.amount,0));
+
+  const isRateBreak = !!cutoff && (
+    (cutoff >= qStart && cutoff <= qEnd) ||
+    (addDays(cutoff,1).getTime() === qStart.getTime())
   );
-
-  const label = qStart.toLocaleDateString('de-AT',{day:'2-digit',month:'2-digit'})
-    +'–'+qEnd.toLocaleDateString('de-AT',{day:'2-digit',month:'2-digit',year:'numeric'});
-
+  const r2 = state.interestRate2 || state.interestRate;
   return {
-    period: label,
-    from: qStart, to: qEnd,
-    begin, rates: totalRates, special: specialSum,
-    fee, interest, end,
+    from: qStart, to: qEnd, begin, rates, special, fee, interest, end, bookings, payoffDate,
+    isRateBreak,
     note: isRateBreak
-      ? (addDays(cutoff,1).getTime()===qStart.getTime() ? `⚡ Ab ${dFmt.format(qStart)}: Folgezins ${((state.interestRate2||state.interestRate)*100).toFixed(2)} %` : `⚡ Zinsbruch ${dFmt.format(addDays(cutoff,1))}: ${(state.interestRate*100).toFixed(2)} % → ${((state.interestRate2||state.interestRate)*100).toFixed(2)} %`)
-      : (specials.length ? `${specials.length} Sondertilgung(en)` : 'Quartal'),
-    isQ: true, is2025: false, isRateBreak
+      ? (addDays(cutoff,1).getTime()===qStart.getTime() ? `⚡ Ab ${dFmt.format(qStart)}: Folgezins ${(r2*100).toFixed(2)} %` : `⚡ Zinsbruch ${dFmt.format(addDays(cutoff,1))}: ${(state.interestRate*100).toFixed(2)} % → ${(r2*100).toFixed(2)} %`)
+      : null
   };
 }
 
 // ── PLAN AUFBAUEN ────────────────────────────────────────────────────────────
-// Struktur: pro Quartal 3 Monatszeilen (nur Regelrate/Sonder, kein Zins) +
-//           1 Quartalsabschlusszeile (Zinsen + Gebühr, echter Endsaldo)
+// Pro Quartal Monatszeilen (Regelrate/Sonder) + Abschluss im 3. Monat (Zinsen, Gebühr,
+// verbindlicher Endsaldo). Die Abschlusszeile trägt zusätzlich die Quartalssummen.
 function buildPlan(){
   const rows = [];
   let balance = round2(state.startBalance);
-  const years = Number(state.years||10);
-  const startD = toDate(state.planStart || '2026-01-01');
-  let d = new Date(startD.getFullYear(), startD.getMonth(), 1);
-  const planEnd = new Date(startD.getFullYear() + years, startD.getMonth(), 1);
-
-  while(d < planEnd){
-    const qS = quarterStart(d);
-    const qE = quarterEnd(d);
-    const qRow = calcQuarterRow(qS, qE, balance); // Quartal komplett berechnen
-
-    // ── Monatliche Zwischenzeilen ──────────────────────────────────────────
-    // Laufender Interims-Saldo: nur Raten + Sonder abziehen (noch keine Zinsen/Gebühr)
+  const startD = planStartDate();
+  const nQ = Math.round(Number(state.years||10)*4);
+  let qS = quarterStart(startD);
+  for(let qi=0; qi<nQ; qi++){
+    const qE = quarterEnd(qS);
+    const q = calcQuarterRow(qS, qE, balance, startD);
     let interim = balance;
-    const months = [];
-    let m = new Date(qS.getFullYear(), qS.getMonth(), 1);
-    let mIdx = 0;
-    while(m <= qE){
-      const mEnd  = new Date(m.getFullYear(), m.getMonth()+1, 0);
-      const payD  = paymentDateFor(m.getFullYear(), m.getMonth());
-      const mSpec = specialsInRange(m, mEnd);
-      const mSpecSum = round2(mSpec.reduce((s,p)=>s+Number(p.amount||0),0));
+    for(let mIdx=0; mIdx<3; mIdx++){
+      const m = new Date(qS.getFullYear(), qS.getMonth()+mIdx, 1);
+      const mEnd = new Date(m.getFullYear(), m.getMonth()+1, 0);
+      if(mEnd < startD) continue;
+      const isLast = mIdx===2;
+      const mb = q.bookings.filter(b=>b.month===m.getMonth());
+      const mRates = round2(mb.filter(b=>b.kind==='rate' && !b.closing).reduce((s,b)=>s+b.amount,0));
+      const closing = mb.find(b=>b.closing);
+      const mSpec = mb.filter(b=>b.kind==='special');
+      const mSpecSum = round2(mSpec.reduce((s,b)=>s+b.amount,0));
       const mBegin = interim;
-      // Interimssaldo: Anfang minus Rate minus Sonder (Zinsen kommen erst am Quartalsende)
-      interim = round2(Math.max(0, interim - state.monthlyRate - mSpecSum));
-      const isLastMonth = (mIdx === 2); // 3. Monat im Quartal = Abschlussmonat
-      months.push({
+      interim = round2(Math.max(0, interim - mRates - mSpecSum));
+      const notes = mSpec.map(b=>`Sonder ${eur.format(b.amount)}${b.amount<b.requested?` (gekappt von ${eur.format(b.requested)})`:''}`);
+      if(closing) notes.push(`Schlusszahlung ${eur.format(closing.amount)} – getilgt ✓`);
+      if(isLast && q.note) notes.unshift(q.note);
+      rows.push({
         period: m.toLocaleDateString('de-AT',{month:'short',year:'numeric'}),
-        from: new Date(m), to: mEnd,
+        from: m < startD ? new Date(startD) : new Date(m), to: mEnd,
         begin: mBegin,
-        rates: state.monthlyRate,
+        rates: round2(mRates + (closing ? closing.amount : 0)),
         special: mSpecSum,
-        fee: isLastMonth ? qRow.fee : 0,       // Gebühr nur in letztem Monat anzeigen
-        interest: isLastMonth ? qRow.interest : 0, // Zinsen nur in letztem Monat anzeigen
-        // Endsaldo: in letztem Monat = echter Quartalsendsaldo, sonst nur Interimssaldo
-        end: isLastMonth ? qRow.end : interim,
-        note: mSpec.length
-          ? mSpec.map(p=>`Sonder ${eur.format(p.amount)}`).join(', ')
-          : (isLastMonth ? 'Quartalsabschluss' : 'Regelrate'),
-        isQ:     isLastMonth,   // Quartalsabschluss-Styling
-        isMid:   !isLastMonth,  // Zwischenzeile
-        is2025:  false
+        fee: isLast ? q.fee : 0,
+        interest: isLast ? q.interest : 0,
+        end: isLast ? q.end : interim,
+        note: notes.length ? notes.join(' · ') : (isLast ? 'Quartalsabschluss' : 'Regelrate'),
+        isQ: isLast, isMid: !isLast, is2025: false,
+        isRateBreak: isLast && q.isRateBreak,
+        qFrom: q.from, qRates: q.rates, qSpecial: isLast ? q.special : 0,
+        bookings: isLast ? q.bookings : null,
+        payoffDate: isLast ? q.payoffDate : null
       });
-      m = new Date(m.getFullYear(), m.getMonth()+1, 1);
-      mIdx++;
     }
-    rows.push(...months);
-    balance = qRow.end;
+    balance = q.end;
     if(balance <= 0) break;
-    d = new Date(qE.getFullYear(), qE.getMonth()+1, 1);
+    qS = new Date(qE.getFullYear(), qE.getMonth()+1, 1);
   }
   return rows;
 }
 
+// Plan bis zur vollständigen Tilgung (unabhängig vom Planhorizont)
+function buildFullPlan(overrides={}){
+  const tmp = cloneState(state);
+  Object.assign(tmp, overrides, {years: FULL_TERM_YEARS});
+  return runWithState(tmp, buildPlan);
+}
+const sumInterest = rows => round2(rows.filter(r=>r.isQ).reduce((s,r)=>s+r.interest,0));
+const payoffOf = rows => { const r = rows.find(x=>x.isQ && x.end<=0); return r ? (r.payoffDate || r.to) : null; };
+
+// Effektivzins: XIRR (act/365) über alle tatsächlichen Zahlungen ohne Sondertilgungen
+// bis zur vollständigen Tilgung; offene Restschuld als Schluss-Cashflow.
+function calcEffektivzins(){
+  const rows = buildFullPlan({specialPayments: []});
+  const t0 = planStartDate();
+  const cfs = [{t:0, a:-state.startBalance}];
+  rows.filter(r=>r.isQ).forEach(r => r.bookings.forEach(b => { if(b.amount) cfs.push({t:daysBetween(t0,b.date)/365, a:b.amount}); }));
+  const last = rows.filter(r=>r.isQ).pop();
+  if(last && last.end > 0) cfs.push({t:daysBetween(t0,last.to)/365, a:last.end});
+  const npv = r => cfs.reduce((s,c)=>s + c.a/Math.pow(1+r, c.t), 0);
+  let lo = -0.99, hi = 1;
+  if(npv(lo)*npv(hi) > 0) return null;
+  for(let i=0;i<200;i++){ const mid=(lo+hi)/2; if(npv(lo)*npv(mid) <= 0) hi=mid; else lo=mid; }
+  return (lo+hi)/2;
+}
+
 // ── KPIs ─────────────────────────────────────────────────────────────────────
 function updateKPIs(rows){
-  const future = rows.filter(r=>!r.is2025 && r.isQ); // nur Quartalsabschlüsse
-  // ── Restschuld HEUTE = Kapitalstand wie Bank-Live-Saldo ──────────────────
-  // letzter abgeschlossener Quartalsabschluss minus seither geflossene
-  // Raten + Sondertilgungen (laufende Q-Zinsen noch nicht gebucht)
-  const today = new Date();
-  const done = future.filter(r => r.to <= today);
-  let last;
-  if(done.length){
-    const lastQ = done[done.length-1];
-    let saldo = lastQ.end;
-    // seit Quartalsende geflossene Monatsraten zählen
-    let m = new Date(lastQ.to.getFullYear(), lastQ.to.getMonth()+1, 1);
-    while(m <= today){
-      const payD = paymentDateFor(m.getFullYear(), m.getMonth());
-      if(payD <= today) saldo = round2(saldo - state.monthlyRate);
-      // Sondertilgungen in diesem Monat bis heute
-      const mEnd = new Date(m.getFullYear(), m.getMonth()+1, 0);
-      specialsInRange(m, mEnd).forEach(p=>{
-        if(toDate(p.date) <= today) saldo = round2(saldo - Number(p.amount||0));
-      });
-      m = new Date(m.getFullYear(), m.getMonth()+1, 1);
-    }
-    last = { end: Math.max(0, saldo) };
+  const future = rows.filter(r=>r.isQ);
+  // Restschuld HEUTE wie Bank-Live-Saldo (laufende Quartalszinsen noch nicht gebucht)
+  qs('#kpiCurrent').textContent = eur.format(calcSaldoAtDate(new Date(), rows));
+
+  const fixEl = qs('#kpiFixEnd'), fixNote = qs('#kpiFixEndNote');
+  if(state.fixedRateUntil){
+    fixEl.textContent = eur.format(calcSaldoAtDate(toDate(state.fixedRateUntil), buildFullPlan()));
+    fixNote.textContent = 'per ' + dFmt.format(toDate(state.fixedRateUntil));
   } else {
-    last = future.length ? { end: state.startBalance } : null;
+    fixEl.textContent = '–';
+    fixNote.textContent = 'kein Fixzins-Ende definiert';
   }
 
-  // ── Restschuld bei Fixzins-Ende ──────────────────────────────────────────
-  if(state.fixedRateUntil){
-    const fixEndSaldo = calcSaldoAtDate(toDate(state.fixedRateUntil));
-    const el = qs('#kpiFixEnd'); if(el) el.textContent = eur.format(fixEndSaldo);
-    const note = qs('#kpiFixEndNote'); if(note) note.textContent = 'per ' + dFmt.format(toDate(state.fixedRateUntil));
-  }
-  // ── Zinsersparnis durch Sondertilgungen (gesamt, über Planhorizont) ──────
-  try {
-    const zinsenMit = future.reduce((s,r)=>s+r.interest,0);
- const tempNoSpecial = cloneState(state);
- tempNoSpecial.specialPayments = [];
- const rowsOhne = runWithState(tempNoSpecial, () => buildPlan());
- const zinsenOhne = rowsOhne.filter(r=>!r.is2025 && r.isQ).reduce((s,r)=>s+r.interest,0);
-    const saving = round2(zinsenOhne - zinsenMit);
-    const elS = qs('#kpiSaving');
-    if(elS) elS.textContent = saving > 0 ? '−' + eur.format(saving) : eur.format(0);
-  } catch(e){ const elS=qs('#kpiSaving'); if(elS) elS.textContent='–'; }
+  // Zinsersparnis durch Sondertilgungen – über die gesamte Laufzeit bis zur Tilgung
+  const fullWith = buildFullPlan();
+  const fullWithout = buildFullPlan({specialPayments: []});
+  const saving = round2(sumInterest(fullWithout) - sumInterest(fullWith));
+  qs('#kpiSaving').textContent = saving > 0 ? '−' + eur.format(saving) : eur.format(0);
 
   qs('#kpiStatement').textContent = eur.format(state.startBalance);
-  qs('#kpiCurrent').textContent   = eur.format(last ? last.end : state.startBalance);
-  qs('#kpiInterest').textContent  = eur.format(future.reduce((s,r)=>s+r.interest,0));
-  qs('#kpiSpecial').textContent   = eur.format(future.reduce((s,r)=>s+r.special,0));
+  qs('#kpiInterest').textContent  = eur.format(sumInterest(rows));
+  qs('#kpiSpecial').textContent   = eur.format(round2(rows.reduce((s,r)=>s+r.special,0)));
 
-  const freeRow = future.find(r=>r.end<=0);
-  const freeText = freeRow ? dFmt.format(freeRow.to) : '> '+state.years+' J.';
-  const freeNote = freeRow ? 'voraussichtlich' : 'außerhalb Planhorizont';
+  const freeDate = payoffOf(rows);
+  const fullFree = freeDate || payoffOf(fullWith);
+  const freeText = fullFree ? dFmt.format(fullFree) : '> ' + FULL_TERM_YEARS + ' J.';
+  const freeNote = freeDate ? 'voraussichtlich' : (fullFree ? 'nach Planhorizont' : 'Kredit wird nicht getilgt');
   qs('#kpiDebtFree').textContent     = freeText;
   qs('#kpiDebtFreeNote').textContent = freeNote;
   qs('#effDebtFree').textContent     = freeText;
   qs('#effNominal').textContent      = pct.format(state.interestRate);
+  qs('#effTotal').textContent = eur.format(round2(future.reduce((s,r)=>s+r.interest+r.fee,0)));
 
-  const totalCost = round2(future.reduce((s,r)=>s+r.interest+r.fee,0));
-  qs('#effTotal').textContent = eur.format(totalCost);
-
-  // Effektivzins: IRR ohne Sondertilgungen, exakter letzter CF, ^4 annualisiert
-  try {
-    const feeGrow = 0.03;
-    const cfIRR = [-state.startBalance];
-    let balIRR = state.startBalance;
-    let done = false;
-    for(let y = toDate(state.planStart||'2026-01-01').getFullYear(); y <= toDate(state.planStart||'2026-01-01').getFullYear()+25 && !done; y++){ // IRR: immer 25 Jahre ab Planstart
-      const _startYearIRR = toDate(state.planStart || '2026-01-01').getFullYear();
-        const feeY = round2(state.quarterFee * Math.pow(1 + feeGrow, y - _startYearIRR));
-      for(let q = 0; q < 4 && !done; q++){
-        const qS = new Date(y, q*3, 1);
-        const qE = quarterEnd(qS);
-        // Zinsen nur auf Regelraten (keine Sonder)
-        const pays = [];
-        for(let m=0;m<3;m++) pays.push(paymentDateFor(y, q*3+m));
-        const evts = pays.map(d=>({date:d,amount:state.monthlyRate})).sort((a,b)=>a.date-b.date);
-        let cursor=qS, running=balIRR, totalInt=0;
-        for(const ev of evts){
-          const d=daysBetween(cursor,ev.date);
-          totalInt+=running*state.interestRate*d/360;
-          running-=ev.amount; if(running<0)running=0;
-          cursor=ev.date;
-        }
-        const d=daysBetween(cursor,qE)+1;
-        totalInt+=running*state.interestRate*d/360;
-        const interest=round2(totalInt);
-        const end=round2(Math.max(0, balIRR+interest+feeY-state.monthlyRate*3));
-        if(end<=0){
-          cfIRR.push(round2(balIRR+interest+feeY)); // exakter letzter CF
-          done=true;
-        } else {
-          cfIRR.push(round2(state.monthlyRate*3+feeY));
-        }
-        balIRR=end;
-      }
-    }
-    // Newton-Raphson IRR
-    let r=0.01;
-    for(let i=0;i<500;i++){
-      let f=0,df=0;
-      cfIRR.forEach((c,j)=>{f+=c/Math.pow(1+r,j); df-=j*c/Math.pow(1+r,j+1);});
-      if(Math.abs(df)<1e-14) break;
-      const rn=r-f/df;
-      if(Math.abs(rn-r)<1e-10){r=rn;break;}
-      r=rn;
-    }
-    const eff=round2(Math.pow(1+r,4)-1); // ^4 = quartalsweise korrekt
-    const effStr=pct.format(eff);
-    qs('#kpiEffzins').textContent=effStr;
-    qs('#effEffektiv').textContent=effStr+' *';
-  } catch(e){ qs('#kpiEffzins').textContent='n/a'; qs('#effEffektiv').textContent='n/a'; }
+  const eff = calcEffektivzins();
+  const effStr = eff === null ? 'n/a' : pct.format(eff);
+  qs('#kpiEffzins').textContent = effStr;
+  qs('#effEffektiv').textContent = effStr + (eff === null ? '' : ' *');
 }
 
 
@@ -976,7 +930,7 @@ function renderPlan(rows){
 
 // ── CHARTS ───────────────────────────────────────────────────────────────────
 function renderCharts(rows){
-  const qRows = rows.filter(r => !r.is2025 && r.isQ); // nur Quartalsabschlüsse
+  const qRows = rows.filter(r => r.isQ); // nur Quartalsabschlüsse
   const labels = qRows.map(r => {
     const d = r.from;
     const q = Math.floor(d.getMonth()/3) + 1;
@@ -1035,7 +989,7 @@ function renderCharts(rows){
         {
           type: 'bar',
           label: 'Sondertilgungen',
-          data: qRows.map(r => r.special),
+          data: qRows.map(r => r.qSpecial),
           backgroundColor: 'rgba(67,122,34,.75)',
           yAxisID: 'ySonder',
           borderRadius: 3
@@ -1097,18 +1051,22 @@ function renderLimitWarnings(){
 }
 
 function calcSavingForSpecial(idx){
-  // Zinsersparnis dieser einen Sondertilgung: Differenz Gesamtzinsen mit vs. ohne diese Zeile
-  let orig = state.specialPayments;
-  try {
-    const item = state.specialPayments[idx];
-    if(!item || !Number(item.amount)) return 0;
-    const zinsenMit = buildPlan().filter(r=>!r.is2025 && r.isQ).reduce((s,r)=>s+r.interest,0);
-    orig = state.specialPayments;
-    state.specialPayments = orig.filter((_,i)=>i!==idx);
-    const zinsenOhne = buildPlan().filter(r=>!r.is2025 && r.isQ).reduce((s,r)=>s+r.interest,0);
-    return round2(zinsenOhne - zinsenMit);
-  } catch(e){ return 0; }
-  finally { state.specialPayments = orig; } // ← state IMMER wiederherstellen
+  // Zinsersparnis dieser einen Sondertilgung über die gesamte Laufzeit
+  const item = state.specialPayments[idx];
+  if(!item || !(Number(item.amount) > 0)) return 0;
+  const mit  = sumInterest(buildFullPlan());
+  const ohne = sumInterest(buildFullPlan({specialPayments: state.specialPayments.filter((_,i)=>i!==idx)}));
+  return round2(ohne - mit);
+}
+
+function updateSpecialSavings(){
+  qsa('#specialList [data-saving-idx]').forEach(el=>{
+    const saving = calcSavingForSpecial(Number(el.dataset.savingIdx));
+    el.innerHTML = saving > 0
+      ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Spart ca. ${eur.format(saving)} Zinsen über die Laufzeit`
+      : '';
+    el.style.display = saving > 0 ? '' : 'none';
+  });
 }
 
 function renderSpecials(){
@@ -1117,18 +1075,14 @@ function renderSpecials(){
   state.specialPayments.forEach((item,idx)=>{
     const row=document.createElement('div');
     row.className='special-item';
-    const saving = calcSavingForSpecial(idx);
-    const savingHtml = saving > 0
-      ? `<div class="special-saving"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Spart ca. ${eur.format(saving)} Zinsen über die Laufzeit</div>`
-      : '';
     row.innerHTML=`
-      <div class="field"><label>Datum (Valuta)</label><input type="date" value="${item.date}" data-kind="date" data-idx="${idx}"></div>
-      <div class="field"><label>Betrag (€)</label><input type="number" step="0.01" value="${item.amount}" data-kind="amount" data-idx="${idx}"></div>
-      <div class="field"><label>Kommentar</label><input type="text" value="${item.note||''}" data-kind="note" data-idx="${idx}"></div>
-      <button class="btn danger-btn" data-remove="${idx}" style="align-self:end">
+      <div class="field"><label>Datum (Valuta)</label><input type="date" value="${escHtml(item.date)}" data-kind="date" data-idx="${idx}"></div>
+      <div class="field"><label>Betrag (€)</label><input type="number" step="0.01" min="0" value="${escHtml(item.amount)}" data-kind="amount" data-idx="${idx}"></div>
+      <div class="field"><label>Kommentar</label><input type="text" value="${escHtml(item.note)}" data-kind="note" data-idx="${idx}"></div>
+      <button class="btn danger-btn" data-remove="${idx}" style="align-self:end" aria-label="Sondertilgung löschen">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
       </button>
-      ${savingHtml}`;
+      <div class="special-saving" data-saving-idx="${idx}" style="display:none"></div>`;
     wrap.appendChild(row);
   });
   wrap.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',e=>{
@@ -1145,146 +1099,114 @@ function renderSpecials(){
     state.specialPayments.splice(idx,1);
     renderSpecials(); recompute(); saveToStorage(true);
   }));
+  updateSpecialSavings();
 }
 
 // ── INPUTS VERDRAHTEN ────────────────────────────────────────────────────────
+const NUM_FIELDS={startBalance:'startBalance',interestRate:'interestRate',monthlyRate:'monthlyRate',
+  paymentDay:'paymentDay',quarterFee:'quarterFee',years:'years',specialLimit:'specialLimit',interestRate2:'interestRate2'};
+let _inputsWired=false;
 function wireInputs(){
-  // Datumsfeld planStart
-  const elPS=qs('#planStart');
-  if(elPS){ elPS.value=state.planStart||'2026-01-01'; elPS.addEventListener('input',()=>{ state.planStart=elPS.value||'2026-01-01'; scheduleRecompute(); saveToStorage(true); }); }
-  // Numerische Felder
-  const numMap={startBalance:'startBalance',interestRate:'interestRate',monthlyRate:'monthlyRate',
-             paymentDay:'paymentDay',quarterFee:'quarterFee',years:'years',
-             specialLimit:'specialLimit',interestRate2:'interestRate2'};
-  Object.entries(numMap).forEach(([id,key])=>{
+  // Werte immer setzen, Listener nur einmal registrieren
+  const elPS=qs('#planStart'), elMode=qs('#calcMode'), elFix=qs('#fixedRateUntil');
+  elPS.value=state.planStart||'2026-01-01';
+  Object.entries(NUM_FIELDS).forEach(([id,key])=>{ const el=qs('#'+id); if(el) el.value=state[key]; });
+  elMode.value=state.calcMode;
+  elFix.value=state.fixedRateUntil||'';
+  if(_inputsWired) return;
+  _inputsWired=true;
+  elPS.addEventListener('input',()=>{ state.planStart=elPS.value||'2026-01-01'; scheduleRecompute(); saveToStorage(true); });
+  Object.entries(NUM_FIELDS).forEach(([id,key])=>{
     const el=qs('#'+id); if(!el) return;
-    el.value=state[key];
     el.addEventListener('input',()=>{
       state[key]=Number(el.value||0);
       updateInputSummaryCards();
       scheduleRecompute(); saveToStorage(true);
     });
   });
-  // Select
-  const selMap={calcMode:'calcMode'};
-  Object.entries(selMap).forEach(([id,key])=>{
-    const el=qs('#'+id); if(!el) return;
-    el.value=state[key];
-    el.addEventListener('input',()=>{
-      state[key]=el.value;
-      scheduleRecompute(); saveToStorage(true);
-    });
-  });
-  // Datumsfeld
-  const dateEl=qs('#fixedRateUntil'); if(dateEl){
-    dateEl.value=state.fixedRateUntil||'';
-    dateEl.addEventListener('input',()=>{
-      state.fixedRateUntil=dateEl.value||'';
-      scheduleRecompute(); saveToStorage(true);
-    });
-  }
+  elMode.addEventListener('input',()=>{ state.calcMode=elMode.value; scheduleRecompute(); saveToStorage(true); });
+  elFix.addEventListener('input',()=>{ state.fixedRateUntil=elFix.value||''; scheduleRecompute(); saveToStorage(true); });
 }
 
 // ── EXPORT ───────────────────────────────────────────────────────────────────
+// Beträge mit Dezimalkomma, damit Excel (de-AT) sie als Zahl erkennt
+const csvNum = v => (typeof v==='number' && isFinite(v)) ? v.toFixed(2).replace('.',',') : v;
+const csvCell = v => `"${String(v ?? '').replaceAll('"','""')}"`;
+function downloadCsv(lines,name){
+  const csv=lines.map(row=>row.map(csvCell).join(';')).join('\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); URL.revokeObjectURL(a.href);
+}
 function exportRows(rows,name){
-  // Meta-Header: Zeitstempel + Parameter
   const now=new Date().toLocaleString('de-AT');
   const meta=[
-    [`Kreditrechner v4.2.1 – Export vom ${now}`],
-    [`Startsaldo:`,state.startBalance,`Zinssatz p.a.:`,pct.format(state.interestRate),
-     `Monatsrate:`,eur.format(state.monthlyRate),`Planjahre:`,state.years],
+    [`Kreditrechner v4.2.2 – Export vom ${now}`],
+    [`Startsaldo:`,csvNum(state.startBalance),`Zinssatz p.a.:`,pct.format(state.interestRate),
+     `Monatsrate:`,csvNum(state.monthlyRate),`Planjahre:`,state.years],
     []
   ];
   const hdr=['Periode','Von','Bis','Anfangssaldo','Regelraten','Sondertilgung','Gebühr','Zinsen','Endsaldo','Hinweis'];
-  const data=rows.map(r=>[r.period,dFmt.format(r.from),dFmt.format(r.to),r.begin,r.rates,r.special,r.fee,r.interest,r.end,r.note]);
-  const csv=[...meta,hdr,...data].map(row=>row.map(v=>`"${String(v).replaceAll('"','""')}"`).join(';')).join('\n');
-  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); URL.revokeObjectURL(a.href);
+  const data=rows.map(r=>[r.period,dFmt.format(r.from),dFmt.format(r.to),csvNum(r.begin),csvNum(r.rates),csvNum(r.special),csvNum(r.fee),csvNum(r.interest),csvNum(r.end),r.note]);
+  downloadCsv([...meta,hdr,...data],name);
 }
+
 
 // ── ZIELSZENARIO-BERECHNUNG ───────────────────────────────────────────────────
-
-// Organisches Ende: wann endet der Kredit ohne zusätzliche Sondertilgungen
-// (mit den aktuell eingetragenen Sondertilgungen, aber ohne neue)
-function calcOrganicEnd(){
-  const rows = buildPlan(); // nutzt aktuellen state inkl. vorhandener Sonder
-  const qRows = rows.filter(r => !r.is2025 && r.isQ);
-  const free = qRows.find(r => r.end <= 0);
-  return free ? free.to : null; // null = außerhalb Planhorizont
+// Zieldatum: 31.12. des letzten Planjahres (Planstart-Jahr + Jahre − 1)
+function zielDate(targetYears){
+  return new Date(planStartDate().getFullYear() + targetYears - 1, 11, 31);
 }
 
-// Simuliert Plan mit ZUSÄTZLICHEN gleichmäßigen Jahres-Sondertilgungen
-// annualExtra: Betrag pro Jahr zusätzlich (je 1× am 15.3. jedes Jahres)
-// Gibt { end: Date|null, totalInterest, rows } zurück
-function simWithExtra(annualExtra){
-  // Temporäre Kopie des state mit extra Sonder hinzugefügt
-  const targetYears = Number(state.years);
-  const extraPayments = [];
-  for(let y = toDate(state.planStart||'2026-01-01').getFullYear(); y < toDate(state.planStart||'2026-01-01').getFullYear() + targetYears; y++){
+// Zusätzliche Jahres-Sondertilgungen am 15.03. – nur Termine ab heute und ab Planstart,
+// bis zum Zieljahr. Simulation und Übernahme verwenden exakt dieselbe Liste.
+function zielExtraPayments(amount, targetYears){
+  const sy = planStartDate().getFullYear();
+  const today = new Date(); today.setHours(0,0,0,0);
+  const out = [];
+  for(let y = sy; y < sy + targetYears; y++){
     const dt = `${y}-03-15`;
-    // Nur zukünftige Zahlungen (ab heute)
-    if(toDate(dt) >= toDate(state.planStart||'2026-01-01')){
-      extraPayments.push({date: dt, amount: round2(annualExtra), note: `Zielplan ${y}`});
-    }
+    const d = toDate(dt);
+    if(d >= planStartDate() && d >= today) out.push({date: dt, amount: round2(amount), note: `Zielplan ${y} (${targetYears}J)`});
   }
-
-  // State temporär überschreiben
-  const origPayments = state.specialPayments;
-  state.specialPayments = [...origPayments, ...extraPayments];
-  const rows = buildPlan();
-  state.specialPayments = origPayments; // zurücksetzen
-
-  const qRows = rows.filter(r => !r.is2025 && r.isQ);
-  const free = qRows.find(r => r.end <= 0);
-  const totalInterest = round2(qRows.reduce((s,r) => s + r.interest, 0));
-  return { end: free ? free.to : null, totalInterest, rows };
+  return out;
 }
 
-// Bisektionssuche: welche jährliche Sondertilgung bringt den Kredit in `targetYears` ans Ende?
-// Gibt { found, annualAmount, endDate, totalInterest, zinsSaving } zurück
+function calcOrganicEnd(){
+  return payoffOf(buildFullPlan());
+}
+
+function simWithExtra(annualExtra, targetYears){
+  const extra = annualExtra > 0 ? zielExtraPayments(annualExtra, targetYears) : [];
+  const rows = buildFullPlan({specialPayments: [...state.specialPayments, ...extra]});
+  return { end: payoffOf(rows), totalInterest: sumInterest(rows), count: extra.length };
+}
+
+// Bisektion: welche jährliche Zusatz-Sondertilgung bringt den Kredit bis zum Zieldatum auf 0?
 function calcRequiredAnnualSpecial(targetYears){
-  // Zieldatum: letzter Tag des Zieljahres (Q4-Ende)
-  const targetDate = new Date(2025 + targetYears, 11, 31);
-
-  // Prüfen ob es ohne Sonder schon erreichbar ist
-  const base = simWithExtra(0);
+  const targetDate = zielDate(targetYears);
+  const base = simWithExtra(0, targetYears);
   if(base.end && base.end <= targetDate){
-    return { found: true, annualAmount: 0, endDate: base.end,
-             totalInterest: base.totalInterest, zinsSaving: 0, alreadyReached: true };
+    return { found: true, annualAmount: 0, endDate: base.end, totalInterest: base.totalInterest, zinsSaving: 0, alreadyReached: true };
   }
+  const maxTry = simWithExtra(state.startBalance, targetYears);
+  if(!maxTry.count || !maxTry.end || maxTry.end > targetDate) return { found: false };
 
-  // Prüfen ob es überhaupt erreichbar ist (mit sehr hohen Sonder)
-  const maxTry = simWithExtra(state.startBalance); // theoretisches Maximum
-  if(!maxTry.end || maxTry.end > targetDate){
-    return { found: false }; // nicht erreichbar in diesem Zeitraum
-  }
-
-  // Bisektion: lo=0, hi=Startsaldo
   let lo = 0, hi = state.startBalance, best = null;
-  for(let i = 0; i < 40; i++){
-    const mid = round2((lo + hi) / 2);
-    const sim = simWithExtra(mid);
+  for(let i = 0; i < 60 && hi - lo >= 0.01; i++){
+    const mid = Math.ceil((lo + hi) / 2 * 100) / 100;
+    const sim = simWithExtra(mid, targetYears);
     if(sim.end && sim.end <= targetDate){
-      best = { annualAmount: mid, endDate: sim.end, totalInterest: sim.totalInterest };
+      best = { annualAmount: mid, endDate: sim.end, totalInterest: sim.totalInterest, count: sim.count };
       hi = mid;
     } else {
       lo = mid;
     }
-    if(hi - lo < 1) break; // Cent-Genauigkeit reicht
   }
-
   if(!best) return { found: false };
-
-  // Zinssparnis gegenüber Plan ohne Extra-Sonder
-  const baseSim = simWithExtra(0);
-  const zinsSaving = round2((baseSim.totalInterest || 0) - best.totalInterest);
-
   return {
-    found: true,
-    annualAmount: best.annualAmount,
-    endDate: best.endDate,
+    found: true, annualAmount: best.annualAmount, endDate: best.endDate, count: best.count,
     totalInterest: best.totalInterest,
-    zinsSaving,
+    zinsSaving: round2(base.totalInterest - best.totalInterest),
     alreadyReached: false
   };
 }
@@ -1294,23 +1216,19 @@ function renderZielSzenarien(){
   const targetYears = Number(state.years);
   qs('#zielYearLabel').textContent = targetYears;
 
-  // Organisches Ende berechnen
   const organicEnd = calcOrganicEnd();
   const organicEl = qs('#organicEnd');
   const organicDiff = qs('#organicDiff');
   if(organicEnd){
     organicEl.textContent = dFmt.format(organicEnd);
-    const organicYears = round2((organicEnd - toDate(state.planStart||'2026-01-01')) / (365.25*24*3600*1000));
-    organicDiff.textContent = `(in ca. ${organicYears.toFixed(1)} Jahren)`;
+    const organicYears = (organicEnd - planStartDate()) / (365.25*24*3600*1000);
+    organicDiff.textContent = `(in ca. ${organicYears.toFixed(1)} Jahren ab Planstart)`;
   } else {
-    organicEl.textContent = '> ' + targetYears + ' J.';
-    organicDiff.textContent = '(außerhalb Planhorizont)';
+    organicEl.textContent = '> ' + FULL_TERM_YEARS + ' J.';
+    organicDiff.textContent = '(Kredit wird mit der aktuellen Rate nicht getilgt)';
   }
 
-  // 3 Szenarien berechnen
-  const scenarios = [targetYears - 1, targetYears, targetYears + 1]
-    .filter(y => y >= 1 && y <= 40);
-
+  const scenarios = [targetYears - 1, targetYears, targetYears + 1].filter(y => y >= 1 && y <= 40);
   const grid = qs('#szenarienGrid');
   grid.innerHTML = '';
 
@@ -1318,9 +1236,9 @@ function renderZielSzenarien(){
     const result = calcRequiredAnnualSpecial(years);
     const isTarget = years === targetYears;
     const isFaster = years < targetYears;
-
     const card = document.createElement('div');
     card.className = 'szenario-card' + (isTarget ? ' is-target' : isFaster ? ' is-faster' : '');
+    const targetDateStr = dFmt.format(zielDate(years));
 
     if(!result.found){
       card.innerHTML = `
@@ -1328,15 +1246,13 @@ function renderZielSzenarien(){
           <div class="szenario-year">${years} Jahre</div>
           <span class="tag warn">Nicht erreichbar</span>
         </div>
-        <div class="szenario-impossible">Selbst mit maximaler Tilgung nicht in diesem Zeitraum möglich.</div>`;
+        <div class="szenario-impossible">Bis ${targetDateStr} auch mit zusätzlichen Sondertilgungen (je 15. März, ab heute) nicht erreichbar.</div>`;
       grid.appendChild(card);
       return;
     }
 
     const tagLabel = isTarget ? 'Ziel' : isFaster ? 'Früher' : 'Später';
     const tagClass = isTarget ? '' : isFaster ? 'ok' : 'warn';
-    const targetDateStr = dFmt.format(new Date(2025 + years, 11, 31));
-
     card.innerHTML = `
       <div class="szenario-header">
         <div class="szenario-year">${years} Jahre</div>
@@ -1347,7 +1263,7 @@ function renderZielSzenarien(){
         <div class="szenario-row"><span>Voraussichtlich fertig</span><span>${result.endDate ? dFmt.format(result.endDate) : '–'}</span></div>
         ${result.alreadyReached
           ? `<div class="szenario-row highlight"><span>Zusatz-Sonder/Jahr</span><span style="color:var(--color-success)">Nicht nötig ✓</span></div>`
-          : `<div class="szenario-row highlight"><span>Zusatz-Sonder/Jahr</span><span>${eur.format(result.annualAmount)}</span></div>`
+          : `<div class="szenario-row highlight"><span>Zusatz-Sonder/Jahr</span><span>${eur.format(result.annualAmount)} × ${result.count}</span></div>`
         }
         <div class="szenario-row saving"><span>Zinssparnis</span><span>${result.zinsSaving > 0 ? '−' + eur.format(result.zinsSaving) : '–'}</span></div>
         <div class="szenario-row"><span>Gesamtzinsen</span><span>${eur.format(result.totalInterest)}</span></div>
@@ -1362,29 +1278,23 @@ function renderZielSzenarien(){
     grid.appendChild(card);
   });
 
-  // Übernahme-Buttons verdrahten
   grid.querySelectorAll('.szenario-take').forEach(btn => {
     btn.addEventListener('click', async () => {
       const years  = Number(btn.dataset.years);
       const amount = Number(btn.dataset.amount);
+      const extra = zielExtraPayments(amount, years);
       const ok = await confirmModal(
         'Sondertilgungen übernehmen?',
-        `Für ${years} Jahre je ${eur.format(amount)} am 15. März hinzufügen (${years} Einträge)? Bestehende Sondertilgungen bleiben erhalten.`,
+        `${extra.length} Sondertilgung(en) zu je ${eur.format(amount)} am 15. März (${extra.map(p=>p.date.slice(0,4)).join(', ')}) hinzufügen? Bestehende Sondertilgungen bleiben erhalten.`,
         'Übernehmen', 'primary'
       );
       if(!ok) return;
-
-      for(let y = toDate(state.planStart||'2026-01-01').getFullYear(); y < toDate(state.planStart||'2026-01-01').getFullYear() + years; y++){
-        const dt = `${y}-03-15`;
-        if(toDate(dt) >= new Date()){
-          state.specialPayments.push({date: dt, amount: round2(amount), note: `Zielplan ${y} (${years}J)`});
-        }
-      }
+      state.specialPayments.push(...extra);
       renderSpecials();
       recompute();
       saveToStorage(true);
-      toast(`${years} Sondertilgungen à ${eur.format(amount)} eingetragen ✓`, 'ok');
-      switchTab('sonder'); // direkt zum Sonder-Tab springen
+      toast(`${extra.length} Sondertilgung(en) à ${eur.format(amount)} eingetragen ✓`, 'ok');
+      switchTab('sonder');
     });
   });
 }
@@ -1393,14 +1303,15 @@ function renderZielSzenarien(){
 function renderAnschlusstabelle(){
   const body = qs('#anschlussBody');
   if(!body) return;
-  const base = runZinssimulator(state.interestRate || 0.0375, true); // Basis 3,75 %
-  const szenarien = [0.0375, 0.04, 0.05, 0.06, 0.07];
+  const basisRate = state.interestRate;
+  const base = runZinssimulator(basisRate, true);
+  const szenarien = [...new Set([basisRate, 0.0375, 0.04, 0.05, 0.06, 0.07].map(z=>Math.round(z*1e6)/1e6))].sort((a,b)=>a-b);
   body.innerHTML = szenarien.map(z => {
-    const sim = runZinssimulator(z, z === (state.interestRate||0.0375));
+    const isBasis = Math.abs(z - basisRate) < 1e-6;
+    const sim = isBasis ? base : runZinssimulator(z);
     const mehrkost = round2(sim.totalCost - base.totalCost);
-    const isBasis = Math.abs(z - (state.interestRate||0.0375)) < 0.0001;
-    const endStr = sim.endDate ? dFmt.format(sim.endDate) : '> 25 J.';
-    const mehrStr = isBasis ? '<span class="muted">Basis</span>'
+    const endStr = sim.endDate ? dFmt.format(sim.endDate) : '> ' + FULL_TERM_YEARS + ' J.';
+    const mehrStr = isBasis ? '<span class="muted">Basis (aktueller Zins)</span>'
       : (mehrkost > 0 ? '<span style="color:var(--color-warning);font-weight:700">+' + eur.format(mehrkost) + '</span>'
                       : '<span style="color:var(--color-success);font-weight:700">−' + eur.format(Math.abs(mehrkost)) + '</span>');
     return `<tr${isBasis?' style="background:color-mix(in srgb,var(--color-primary-highlight) 20%,transparent);font-weight:600"':''}>
@@ -1412,6 +1323,7 @@ function renderAnschlusstabelle(){
     </tr>`;
   }).join('');
 }
+
 
 // ── DEBOUNCE für recompute (150 ms) ──────────────────────────────────────────
 let _recomputeTimer = null;
@@ -1427,14 +1339,27 @@ function validateInputs(){
     errors.push('Planstart muss ein gültiges Datum sein (z.B. 2026-01-01).');
   if(!state.startBalance||state.startBalance<=0)
     errors.push('Startsaldo muss größer als 0 sein.');
+  const decHint = v => v>=1 ? ` Bitte dezimal eingeben: 3,75\u202f% = 0.0375 (eingegeben: ${v}).` : '';
   if(!state.interestRate||state.interestRate<=0||state.interestRate>0.25)
-    errors.push('Zinssatz muss zwischen 0,01\u202f% und 25,00\u202f% liegen.');
+    errors.push('Zinssatz muss zwischen 0,01\u202f% und 25,00\u202f% liegen.'+decHint(state.interestRate));
   if(state.interestRate2 && (state.interestRate2<=0||state.interestRate2>0.25))
-    errors.push('Folgezins muss zwischen 0,01\u202f% und 25,00\u202f% liegen.');
+    errors.push('Folgezins muss zwischen 0,01\u202f% und 25,00\u202f% liegen.'+decHint(state.interestRate2));
   if(!state.monthlyRate||state.monthlyRate<=0)
     errors.push('Monatsrate muss größer als 0 sein.');
-  if(state.monthlyRate<round2(state.startBalance*state.interestRate/12))
-    errors.push('Monatsrate deckt nicht die Monatszinsen \u2013 Kredit w\u00e4chst unbegrenzt.');
+  else if(state.startBalance>0){
+    // längstes Quartal (92 Tage) im gewählten Zinsmodus, höherer der beiden Zinssätze
+    const maxRate = Math.max(state.interestRate||0, state.fixedRateUntil ? (state.interestRate2||0) : 0);
+    const qFactor = state.calcMode==='monthly' ? 0.25 : 92/(state.calcMode==='daily_365'?365:360);
+    const qInterest = state.startBalance*maxRate*qFactor;
+    if(state.monthlyRate*3 <= qInterest + (Number(state.quarterFee)||0))
+      errors.push(`Monatsrate deckt die Quartalszinsen nicht (ca. ${eur.format(qInterest/3)} pro Monat) \u2013 der Kredit w\u00fcrde wachsen.`);
+  }
+  state.specialPayments.forEach((p,i)=>{
+    if(!isValidIsoDate(p.date))
+      errors.push(`Sondertilgung ${i+1}: ung\u00fcltiges oder fehlendes Datum.`);
+    if(Number(p.amount)<0)
+      errors.push(`Sondertilgung ${i+1}: Betrag darf nicht negativ sein.`);
+  });
   if(!state.years||state.years<1||state.years>40)
     errors.push('Planjahre m\u00fcssen zwischen 1 und 40 liegen.');
   if(!state.paymentDay||state.paymentDay<1||state.paymentDay>28)
@@ -1453,8 +1378,7 @@ function validateInputs(){
     box.id='validationErrors';
     box.style.cssText='background:#fcebd5;color:#7a3510;border-left:3px solid #964219;'
       +'border-radius:.5rem;padding:.75rem 1rem;margin-bottom:1rem;font-size:.85rem;display:none;grid-column:1/-1;';
-    const panel=document.getElementById('panel-rechner');
-    if(panel){const fg=panel.querySelector('.form-grid');if(fg)fg.before(box);}
+    qs('.main .stack').prepend(box);
   }
   if(errors.length){
     box.innerHTML=errors.map(e=>`<div style="margin:.15rem 0">&#9888;\u202f${e}</div>`).join('');
@@ -1477,7 +1401,8 @@ function recompute(){
   renderJahresplan(rows);
   renderZinssimulator();
   renderAnschlusstabelle();
-  setupStichtag();
+  updateSpecialSavings();
+  updateStichtag(rows);
   qs('#exportCsv').onclick=()=>exportRows(rows,'kreditrechner-export.csv');
   qs('#downloadPlan').onclick=()=>exportRows(rows,'tilgungsplan.csv');
   return rows;
@@ -1501,6 +1426,12 @@ function saveToStorage(silent=false){
   }catch(e){toast('Speichern fehlgeschlagen','warn');}
 }
 
+function normalizeSpecials(arr){
+  return Array.isArray(arr) ? arr.filter(p=>p && typeof p==='object').map(p=>({
+    date: String(p.date ?? ''), amount: Number(p.amount)||0, note: String(p.note ?? '')
+  })) : [];
+}
+
 function loadFromStorage(){
   try{
     const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return false;
@@ -1518,7 +1449,7 @@ function loadFromStorage(){
       years:s.years??DEFAULT_STATE.years,
       calcMode:s.calcMode??DEFAULT_STATE.calcMode,
       specialLimit:s.specialLimit??0,
-      specialPayments:Array.isArray(s.specialPayments)?s.specialPayments:DEFAULT_STATE.specialPayments
+      specialPayments:normalizeSpecials(s.specialPayments)
     });
     const savedAt=parsed.savedAt?new Date(parsed.savedAt):null;
     if(savedAt){
@@ -1532,7 +1463,7 @@ function loadFromStorage(){
 
 // ── JSON EXPORT/IMPORT ───────────────────────────────────────────────────────
 function exportJson(){
-  const payload={app:'Kreditrechner v4.2.1 – Allgemeiner Kreditrechner',exportedAt:new Date().toISOString(),
+  const payload={app:'Kreditrechner v4.2.2 – Allgemeiner Kreditrechner',exportedAt:new Date().toISOString(),
     state:{planStart:state.planStart,startBalance:state.startBalance,interestRate:state.interestRate,monthlyRate:state.monthlyRate,
       paymentDay:state.paymentDay,quarterFee:state.quarterFee,years:state.years,
       calcMode:state.calcMode,specialLimit:state.specialLimit,specialPayments:state.specialPayments,
@@ -1540,7 +1471,7 @@ function exportJson(){
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='kreditrechner-v4.2.1-'+new Date().toISOString().slice(0,10)+'.json';
+  a.download='kreditrechner-v4.2.2-'+new Date().toISOString().slice(0,10)+'.json';
   a.click(); URL.revokeObjectURL(a.href);
   toast('JSON-Export erstellt ✓','ok');
 }
@@ -1552,13 +1483,14 @@ function importJson(file){
       const parsed=JSON.parse(e.target.result);
       const s=parsed.state; if(!s||typeof s.startBalance==='undefined') throw new Error('Ungültiges Format');
       state=Object.assign({},DEFAULT_STATE,{
+        planStart:s.planStart??DEFAULT_STATE.planStart,
         startBalance:s.startBalance,interestRate:s.interestRate??DEFAULT_STATE.interestRate,
         interestRate2:s.interestRate2??DEFAULT_STATE.interestRate2,
         fixedRateUntil:s.fixedRateUntil??DEFAULT_STATE.fixedRateUntil,
         monthlyRate:s.monthlyRate??DEFAULT_STATE.monthlyRate,paymentDay:s.paymentDay??DEFAULT_STATE.paymentDay,
         quarterFee:s.quarterFee??DEFAULT_STATE.quarterFee,years:s.years??DEFAULT_STATE.years,
         calcMode:s.calcMode??DEFAULT_STATE.calcMode,specialLimit:s.specialLimit??0,
-        specialPayments:Array.isArray(s.specialPayments)?s.specialPayments:[]
+        specialPayments:normalizeSpecials(s.specialPayments)
       });
       wireInputs(); renderSpecials(); recompute(); saveToStorage(true);
       const el=qs('#importStatus'); el.className='note ok'; el.style.display='';
@@ -1589,12 +1521,10 @@ const TAB_TITLES={dashboard:'Übersicht',rechner:'Rechnerparameter',sonder:'Sond
 function switchTab(target){
   qsa('.nav button').forEach(x=>x.classList.remove('active'));
   const btn=qs(`.nav button[data-tab="${target}"]`); if(btn) btn.classList.add('active');
-  if(target==='dashboard'){
-    qsa('.tab-panel').forEach(p=>p.hidden=false);
-  } else {
-    qsa('.tab-panel').forEach(p=>p.hidden=true);
-    const panel=qs(`#panel-${target}`); if(panel) panel.hidden=false;
-  }
+  qsa('.tab-panel').forEach(p=>{
+    p.hidden = target==='dashboard' ? !p.id.startsWith('panel-dashboard') : p.id!==`panel-${target}`;
+  });
+  window.scrollTo(0,0);
   qs('#headerTitle').textContent=TAB_TITLES[target]||target;
 }
 
@@ -1607,7 +1537,9 @@ function setupNav(){
 
 function setupTheme(){
   const root=document.documentElement;
-  let dark=window.matchMedia('(prefers-color-scheme: dark)').matches;
+  let saved=null;
+  try{ saved=localStorage.getItem('kreditrechner_theme'); }catch(e){}
+  let dark=saved ? saved==='dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
   const apply=()=>{
     root.setAttribute('data-theme',dark?'dark':'light');
     qs('#themeIcon').innerHTML=dark
@@ -1615,73 +1547,55 @@ function setupTheme(){
       :'<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>';
   };
   apply();
-  qs('#themeToggle').addEventListener('click',()=>{dark=!dark;apply();});
+  qs('#themeToggle').addEventListener('click',()=>{
+    dark=!dark; apply();
+    try{ localStorage.setItem('kreditrechner_theme', dark?'dark':'light'); }catch(e){}
+  });
 }
 
 
 // ── RESTSCHULD ZU STICHTAG ───────────────────────────────────────────────────
-function calcSaldoAtDate(targetDate){
-  const rows = buildPlan();
-  const future = rows.filter(r => !r.is2025 && r.isQ);
-  // letzter Quartalsabschluss VOR oder AM Stichtag
-  const done = future.filter(r => r.to <= targetDate);
-  if(!done.length){
-    // noch kein Quartal abgeschlossen → Startsaldo minus Raten seit Planstart
-    let saldo = state.startBalance;
-    let m = new Date(toDate(state.planStart||'2026-01-01').getFullYear(), toDate(state.planStart||'2026-01-01').getMonth(), 1);
-    while(m <= targetDate){
-      const payD = paymentDateFor(m.getFullYear(), m.getMonth());
-      if(payD <= targetDate) saldo = round2(saldo - state.monthlyRate);
-      const mEnd = new Date(m.getFullYear(), m.getMonth()+1, 0);
-      specialsInRange(m, mEnd).forEach(p=>{
-        if(toDate(p.date) <= targetDate) saldo = round2(saldo - Number(p.amount||0));
-      });
-      m = new Date(m.getFullYear(), m.getMonth()+1, 1);
-    }
-    return Math.max(0, saldo);
+function calcSaldoAtDate(targetDate, rows){
+  // Banknaher Saldo: letzter Quartalsabschluss bis zum Stichtag minus seither gebuchte
+  // Raten/Sondertilgungen; laufende Quartalszinsen sind noch nicht kapitalisiert.
+  rows = rows || buildPlan();
+  if(targetDate < planStartDate()) return round2(state.startBalance);
+  let saldo = round2(state.startBalance), next = null;
+  for(const r of rows.filter(x=>x.isQ)){
+    if(r.to <= targetDate) saldo = r.end;
+    else { next = r; break; }
   }
-  const lastQ = done[done.length-1];
-  let saldo = lastQ.end;
   if(saldo <= 0) return 0;
-  // seit Quartalsende fällige Raten + Sonder bis Stichtag
-  let m = new Date(lastQ.to.getFullYear(), lastQ.to.getMonth()+1, 1);
-  while(m <= targetDate){
-    const payD = paymentDateFor(m.getFullYear(), m.getMonth());
-    if(payD <= targetDate) saldo = round2(saldo - state.monthlyRate);
-    const mEnd = new Date(m.getFullYear(), m.getMonth()+1, 0);
-    specialsInRange(m, mEnd).forEach(p=>{
-      if(toDate(p.date) <= targetDate) saldo = round2(saldo - Number(p.amount||0));
-    });
-    m = new Date(m.getFullYear(), m.getMonth()+1, 1);
-  }
+  if(next) next.bookings.forEach(b => { if(!b.closing && b.date <= targetDate) saldo = round2(saldo - b.amount); });
   return Math.max(0, saldo);
 }
 
-function setupStichtag(){
+let _stichtagRows = null, _stichtagWired = false;
+function updateStichtag(rows){
   const inp = qs('#stichtagInput');
   if(!inp) return;
-  // Default: heute
-  inp.value = new Date().toISOString().slice(0,10);
-  function update(){
-    const d = toDate(inp.value);
-    if(isNaN(d)) return;
-    const saldo = calcSaldoAtDate(d);
-    qs('#stichtagResult').textContent = eur.format(saldo);
-    qs('#stichtagSub').textContent = 'Banknaher Saldo per ' + dFmt.format(d)
-      + (saldo === 0 ? ' – Kredit bereits getilgt ✓' : '');
+  if(rows) _stichtagRows = rows;
+  if(!_stichtagWired){
+    _stichtagWired = true;
+    inp.value = localDateStr(new Date());
+    inp.addEventListener('input', () => updateStichtag());
   }
-  inp.addEventListener('input', update);
-  update();
+  const d = toDate(inp.value);
+  if(isNaN(d)) return;
+  const saldo = calcSaldoAtDate(d, _stichtagRows && _stichtagRows.length && d <= _stichtagRows[_stichtagRows.length-1].to ? _stichtagRows : buildFullPlan());
+  qs('#stichtagResult').textContent = eur.format(saldo);
+  qs('#stichtagSub').textContent = 'Banknaher Saldo per ' + dFmt.format(d)
+    + (saldo === 0 ? ' – Kredit bereits getilgt ✓' : '');
 }
+
 
 // ── JAHRESÜBERSICHT RENDERN ──────────────────────────────────────────────────
 function renderJahresplan(rows){
   const body = qs('#jahresBody');
   if(!body) return;
   // Nur ab 2026, Quartalsabschlüsse gruppiert nach Jahr
-  const future = rows.filter(r => !r.is2025);
   const byYear = {};
-  future.forEach(r => {
+  rows.forEach(r => {
     const y = r.from.getFullYear();
     if(!byYear[y]) byYear[y] = {year:y, begin:null, rates:0, special:0, interest:0, fee:0, end:0};
     const yr = byYear[y];
@@ -1694,7 +1608,7 @@ function renderJahresplan(rows){
   });
   const years = Object.values(byYear).sort((a,b)=>a.year-b.year);
   body.innerHTML = years.map(yr => {
-    const tilgung = round2(yr.rates + yr.special);
+    const tilgung = round2(yr.begin - yr.end); // tatsächliche Verringerung der Restschuld
     return `<tr class="is-year-total">
       <td><strong>${yr.year}</strong></td>
       <td>${eur.format(yr.begin)}</td>
@@ -1710,104 +1624,76 @@ function renderJahresplan(rows){
   // CSV-Export für Jahresplan
   const dlBtn = qs('#downloadJahr');
   if(dlBtn) dlBtn.onclick = () => {
-    const hdr = ['Jahr','Anfangssaldo','Regelraten','Sondertilgungen','Zinsen','Gebühren','Tilgung gesamt','Endsaldo'];
-    const data = years.map(yr => [yr.year, yr.begin, yr.rates, yr.special, yr.interest, yr.fee, round2(yr.rates+yr.special), yr.end]);
-    const csv = [hdr,...data].map(r=>r.map(v=>`"${v}"`).join(';')).join('\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
-    a.download = 'jahresplan.csv'; a.click(); URL.revokeObjectURL(a.href);
+    const hdr = ['Jahr','Anfangssaldo','Regelraten','Sondertilgungen','Zinsen','Gebühren','Tilgung (Schuldabbau)','Endsaldo'];
+    const data = years.map(yr => [yr.year, csvNum(yr.begin), csvNum(yr.rates), csvNum(yr.special), csvNum(yr.interest), csvNum(yr.fee), csvNum(round2(yr.begin-yr.end)), csvNum(yr.end)]);
+    downloadCsv([hdr,...data],'jahresplan.csv');
   };
 }
 
 // ── ZINSSIMULATOR ────────────────────────────────────────────────────────────
-function runZinssimulator(folgezins, useConstantRate=false){
-  // Simulation: bis Fixende 3.75%, danach folgezins
-  // useConstantRate=true: kein Zinsbruch, gleicher Satz durchgehend (für Vergleichsbasis)
-  const orig2 = state.interestRate2;
-  const origFixed = state.fixedRateUntil;
-  const origRate  = state.interestRate;
-  if(useConstantRate){
-    // Vergleichsbasis: konstanter Fixzins ohne Bruch
-    state.interestRate2  = folgezins;
-    state.interestRate   = folgezins;
-    state.fixedRateUntil = ''; // kein Bruch
-  } else {
-    state.interestRate2 = folgezins;
-    if(!state.fixedRateUntil) state.fixedRateUntil = '2029-12-31';
-  }
-
-  // Simuliere mit 25 Jahren Horizont
-  const origYears = state.years;
-  state.years = 25;
-  const rows = buildPlan();
-  state.years = origYears;
-  state.interestRate2  = orig2;
-  state.fixedRateUntil = origFixed;
-  state.interestRate   = origRate;
-
-  const future = rows.filter(r => !r.is2025 && r.isQ);
-  const freeRow = future.find(r => r.end <= 0);
-  const totalInterest = round2(future.reduce((s,r)=>s+r.interest,0));
-  const totalFee = round2(future.reduce((s,r)=>s+r.fee,0));
-  return {
-    endDate: freeRow ? freeRow.to : null,
-    totalInterest, totalFee,
-    totalCost: round2(totalInterest + totalFee)
-  };
+// Ohne definiertes Fixzins-Ende gilt der simulierte Folgezins ab heute
+function simCutoff(){
+  if(state.fixedRateUntil) return state.fixedRateUntil;
+  return localDateStr(addDays(new Date(), -1));
 }
 
+function runZinssimulator(folgezins, useConstantRate=false){
+  // useConstantRate=true: durchgehend ein Zinssatz ohne Zinsbruch (Vergleichsbasis)
+  const rows = buildFullPlan(useConstantRate
+    ? {interestRate: folgezins, interestRate2: folgezins, fixedRateUntil: ''}
+    : {interestRate2: folgezins, fixedRateUntil: simCutoff()});
+  const future = rows.filter(r => r.isQ);
+  const totalInterest = round2(future.reduce((s,r)=>s+r.interest,0));
+  const totalFee = round2(future.reduce((s,r)=>s+r.fee,0));
+  return { endDate: payoffOf(rows), totalInterest, totalFee, totalCost: round2(totalInterest + totalFee) };
+}
+
+let _simWired = false, _simLastRate2 = null;
 function renderZinssimulator(){
   const slider = qs('#zinssimSlider');
   const label  = qs('#zinssimLabel');
   const result = qs('#zinssimResult');
   if(!slider || !result) return;
 
-  // Simulator-Header dynamisch befüllen
-  const _fru = state.fixedRateUntil;
-  const _tagEl = qs('#simRateTag');
-  const _fromEl = qs('#simRateFrom');
-  if(_fru){
-    const _nextDay = new Date(toDate(_fru).getTime() + 86400000);
-    const _label = `Ab ${formatDate(toDate(_fru))} (Folgezins)`;
-    if(_tagEl) _tagEl.textContent = _label;
-    if(_fromEl) _fromEl.textContent = formatDate(_nextDay);
-  } else {
-    if(_tagEl) _tagEl.textContent = 'Kein Fixzinsende definiert';
-    if(_fromEl) _fromEl.textContent = '–';
-  }
+  const fru = state.fixedRateUntil;
+  const fromDate = addDays(toDate(simCutoff()), 1);
+  qs('#simRateTag').textContent = fru ? `Ab ${formatDate(fromDate)} (Folgezins)` : 'Kein Fixzins-Ende – Folgezins ab heute simuliert';
 
-  // Basis: aktueller Folgezins aus state
-  slider.value = (state.interestRate2 || 0.0375) * 100;
+  // Slider nur neu setzen, wenn sich der Folgezins in den Parametern geändert hat
+  const rate2 = state.interestRate2 || state.interestRate;
+  if(_simLastRate2 !== rate2){ slider.value = rate2 * 100; _simLastRate2 = rate2; }
 
   function update(){
-    const pct = parseFloat(slider.value);
-    label.textContent = pct.toLocaleString('de-AT', {minimumFractionDigits:2}) + ' %';
-
-    const sim    = runZinssimulator(pct / 100);
-    const base   = runZinssimulator(state.interestRate || 0.0375, true); // Vergleichsbasis: konstanter Fixzins
+    const p = parseFloat(slider.value);
+    label.textContent = p.toLocaleString('de-AT', {minimumFractionDigits:2}) + ' %';
+    const sim  = runZinssimulator(p / 100);
+    const base = runZinssimulator(state.interestRate, true);
     const mehrkost = round2(sim.totalCost - base.totalCost);
     const isTeurer = mehrkost > 0;
-
-    const endStr = sim.endDate ? dFmt.format(sim.endDate) : '> 25 J.';
-    const baseEnd = base.endDate ? dFmt.format(base.endDate) : '> 25 J.';
-
+    const endStr  = sim.endDate ? dFmt.format(sim.endDate) : '> ' + FULL_TERM_YEARS + ' J.';
+    const baseEnd = base.endDate ? dFmt.format(base.endDate) : '> ' + FULL_TERM_YEARS + ' J.';
+    const baseLbl = (state.interestRate*100).toLocaleString('de-AT',{minimumFractionDigits:2});
     result.innerHTML = `
-      <div class="zinssim-row"><span>Folgezins ab <span id="simRateFrom">–</span></span><span>${pct.toLocaleString('de-AT',{minimumFractionDigits:2})} %</span></div>
+      <div class="zinssim-row"><span>Folgezins ab ${formatDate(addDays(toDate(simCutoff()),1))}</span><span>${p.toLocaleString('de-AT',{minimumFractionDigits:2})} %</span></div>
       <div class="zinssim-row"><span>Schuldenfrei am</span><span>${endStr}</span></div>
       <div class="zinssim-row"><span>Gesamtzinsen</span><span>${eur.format(sim.totalInterest)}</span></div>
       <div class="zinssim-row"><span>Gebühren gesamt</span><span>${eur.format(sim.totalFee)}</span></div>
       <div class="zinssim-row ${isTeurer?'highlight':'ok'}">
-        <span>${isTeurer ? '⚠ Mehrkosten vs. Basiszins' : '✓ Ersparnis vs. Basiszins'}</span>
-        <span>${isTeurer ? '+' : '−'}${eur.format(Math.abs(mehrkost))}</span>
+        <span>${isTeurer ? '⚠ Mehrkosten vs. Basiszins' : mehrkost < 0 ? '✓ Ersparnis vs. Basiszins' : 'Unterschied vs. Basiszins'}</span>
+        <span>${isTeurer ? '+' : mehrkost < 0 ? '−' : ''}${eur.format(Math.abs(mehrkost))}</span>
       </div>
       <div class="zinssim-row" style="font-size:var(--text-xs);color:var(--color-text-muted)">
-        <span>Vergleichsbasis (3,75 %)</span><span>${baseEnd} · ${eur.format(base.totalCost)}</span>
+        <span>Vergleichsbasis (${baseLbl} % durchgehend)</span><span>${baseEnd} · ${eur.format(base.totalCost)}</span>
       </div>`;
   }
-
-  slider.addEventListener('input', update);
+  renderZinssimulator.update = update;
+  if(!_simWired){
+    _simWired = true;
+    slider.addEventListener('input', () => renderZinssimulator.update());
+  }
   update();
 }
+
 
 // ── EIGENES CONFIRM-MODAL ─────────────────────────────────────────────────────
 // Verwendung: confirmModal('Titel', 'Nachricht', 'OK-Label').then(ok => { if(ok) ... })
@@ -1855,8 +1741,8 @@ recompute();
 if(wasLoaded) toast('Einstellungen wiederhergestellt ✓','ok',2500);
 
 qs('#addSpecial').addEventListener('click',()=>{
-  const _sy = toDate(state.planStart||'2026-01-01');
-  const _defDate = `${_sy.getFullYear()}-12-15`;
+  const _today = new Date();
+  const _defDate = _today >= planStartDate() ? localDateStr(_today) : state.planStart;
   state.specialPayments.push({date:_defDate,amount:0,note:''});
   renderSpecials(); scheduleRecompute(); saveToStorage(true);
 });
