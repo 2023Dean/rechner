@@ -100,12 +100,13 @@
     .split{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-6)}
     canvas{max-height:300px}
     .special-list{display:grid;gap:var(--space-3)}
-    .special-item{display:grid;grid-template-columns:1fr 1fr 1.5fr auto;gap:var(--space-3);align-items:end;padding:var(--space-4);border-radius:var(--radius-lg);background:var(--color-surface-2);border:1px solid rgba(40,37,29,.1)}
+    .special-item{display:grid;grid-template-columns:1fr 1fr 1.5fr 1fr auto;gap:var(--space-3);align-items:end;padding:var(--space-4);border-radius:var(--radius-lg);background:var(--color-surface-2);border:1px solid rgba(40,37,29,.1)}
     .special-meta{grid-column:1/-1;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-top:-.3rem}
     .special-status{font-size:var(--text-xs);font-weight:700;padding:.15rem .55rem;border-radius:999px}
     .special-status.done{background:color-mix(in srgb,var(--color-success) 18%,transparent);color:var(--color-success)}
     .special-status.planned{border:1px dashed var(--color-text-muted);color:var(--color-text-muted)}
     .special-status.warn{background:#fcebd5;color:#7a3510}
+    .special-ratecut{font-size:var(--text-xs);font-weight:700;color:var(--color-primary)}
     .special-saving{font-size:var(--text-xs);color:var(--color-success);font-weight:700;display:flex;align-items:center;gap:.4rem}
     .special-saving svg{width:13px;height:13px}
     .muted{color:var(--color-text-muted)}
@@ -431,6 +432,18 @@
           <div id="limitWarningRechner"></div>
         </article>
 
+        <article class="card stack" id="rateChangeCard">
+          <div class="section-title">
+            <div><span class="tag">Ratenhistorie</span><h3>Ratenänderungen ab Datum</h3></div>
+            <button class="btn primary" id="addRateChange">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Ratenänderung hinzufügen
+            </button>
+          </div>
+          <p style="margin-top:-.5rem">Ab dem Datum gilt die neue Monatsrate für alle folgenden Zahlungstermine (z.B. Anpassung durch die Bank). Ratensenkungen aus Sondertilgungen mit Wirkung „Rate senken“ erscheinen hier automatisch.</p>
+          <div id="rateChangeList" class="special-list"></div>
+        </article>
+
         <!-- ── ZIELSZENARIO-SEKTION ── -->
         <article class="card stack" id="zielCard">
           <div class="section-title">
@@ -629,7 +642,8 @@ const DEFAULT_STATE = {
   years:          10,
   calcMode:       'daily_360',
   specialLimit:   0,
-  specialPayments:[]
+  specialPayments:[],
+  rateChanges:[]          // [{date, rate, note}] neue Monatsrate ab Datum
 };
 
 let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
@@ -716,7 +730,7 @@ function calcQuarterRow(qStart, qEnd, begin, periodStart){
   for(let i=0;i<3;i++){
     const mo = new Date(qStart.getFullYear(), qStart.getMonth()+i, 1);
     const d = paymentDateFor(mo.getFullYear(), mo.getMonth());
-    if(d >= pStart) events.push({date:d, amount:Number(state.monthlyRate)||0, kind:'rate', month:mo.getMonth()});
+    if(d >= pStart) events.push({date:d, amount:monthlyRateFor(d), kind:'rate', month:mo.getMonth()});
   }
   specialsInRange(pStart, qEnd).forEach(p => {
     const d = toDate(p.date);
@@ -788,7 +802,76 @@ function calcQuarterRow(qStart, qEnd, begin, periodStart){
 // ── PLAN AUFBAUEN ────────────────────────────────────────────────────────────
 // Pro Quartal Monatszeilen (Regelrate/Sonder) + Abschluss im 3. Monat (Zinsen, Gebühr,
 // verbindlicher Endsaldo). Die Abschlusszeile trägt zusätzlich die Quartalssummen.
+// ── RATENÄNDERUNGEN ──────────────────────────────────────────────────────────
+let _activeRC = [];
+function monthlyRateFor(d, list=_activeRC){
+  let r = Number(state.monthlyRate)||0;
+  for(const c of list) if(c.d <= d) r = c.rate;
+  return r;
+}
+function manualRateChanges(){
+  return (state.rateChanges||[]).filter(c=>isValidIsoDate(c.date) && Number(c.rate)>0)
+    .map(c=>({date:c.date, rate:Number(c.rate), note:c.note||'', auto:false}));
+}
+// Manuelle Ratenänderungen + automatisch berechnete Ratensenkungen nach Sondertilgungen
+// mit Wirkung "Rate senken": niedrigste Rate (auf Cent), mit der der Kredit spätestens
+// zum bisherigen Termin (ohne diese Sondertilgung) getilgt ist.
+const _rcCache = new Map();
+let _autoRC = []; // einmal pro recompute bestimmt, in Nebenrechnungen wiederverwendet
+function resolveRateChanges(){
+  const manual = manualRateChanges().map(c=>({...c, d:toDate(c.date)}));
+  const auto = [];
+  _autoRC.forEach(a => {
+    const src = state.specialPayments.find(p=>p.mode==='rate' && p.date===a.srcDate && Number(p.amount)===a.srcAmount);
+    if(src) auto.push({date:a.date, rate:a.rate, note:a.note, auto:true, src, d:toDate(a.date)});
+  });
+  return [...manual, ...auto].sort((a,b)=>a.d-b.d);
+}
+function refreshAutoRateChanges(){
+  _autoRC = computeRateChanges().filter(c=>c.auto)
+    .map(c=>({date:c.date, rate:c.rate, note:c.note, srcDate:c.src.date, srcAmount:Number(c.src.amount)}));
+}
+function computeRateChanges(){
+  const toRC = list => list.map(c=>({...c, d:toDate(c.date)})).sort((a,b)=>a.d-b.d);
+  const manual = toRC(manualRateChanges());
+  const rateSpecials = state.specialPayments
+    .filter(p=>p.mode==='rate' && isValidIsoDate(p.date) && Number(p.amount)>0 && toDate(p.date) >= planStartDate())
+    .sort((a,b)=>a.date.localeCompare(b.date));
+  if(!rateSpecials.length) return manual;
+  const key = JSON.stringify([state.planStart,state.startBalance,state.interestRate,state.interestRate2,state.fixedRateUntil,
+    state.monthlyRate,state.paymentDay,state.quarterFee,state.calcMode,state.specialPayments,state.rateChanges]);
+  if(_rcCache.has(key)){
+    // Quelle (src) auf die aktuellen Objekte abbilden
+    return _rcCache.get(key).map(c=>({...c, d:new Date(c.d), src: c.srcIdx>=0 ? state.specialPayments[c.srcIdx] : undefined}));
+  }
+  const full = (specials, list) => runWithState(Object.assign(cloneState(state), {years: FULL_TERM_YEARS, specialPayments: specials}), () => buildPlanWith(list));
+  let rc = manual;
+  for(const s of rateSpecials){
+    const sD = toDate(s.date);
+    const others = state.specialPayments.filter(p=>p!==s);
+    const P = payoffOf(full(others, rc));
+    if(!P) continue;
+    const date = localDateStr(addDays(sD,1));
+    const tryRate = r => toRC([...rc, {date, rate:r, auto:true, src:s}]);
+    const reaches = r => { const po = payoffOf(full(state.specialPayments, tryRate(r))); return po && po <= P; };
+    let lo = 0, hi = monthlyRateFor(addDays(sD,1), rc);
+    if(!reaches(hi)) continue;
+    for(let i=0; i<40 && hi-lo >= 0.01; i++){ const mid = Math.ceil((lo+hi)/2*100)/100; if(reaches(mid)) hi = mid; else lo = mid; }
+    rc = toRC([...rc, {date, rate:hi, auto:true, src:s, note:`Ratensenkung nach Sondertilgung ${eur.format(Number(s.amount))} vom ${dFmt.format(sD)}`}]);
+  }
+  if(_rcCache.size > 200) _rcCache.clear();
+  _rcCache.set(key, rc.map(c=>({...c, d:c.d.getTime(), src:undefined, srcIdx: c.src ? state.specialPayments.indexOf(c.src) : -1})));
+  return rc;
+}
 function buildPlan(){
+  return buildPlanWith(resolveRateChanges());
+}
+function buildPlanWith(rc){
+  const prev = _activeRC;
+  _activeRC = rc;
+  try { return buildPlanCore(); } finally { _activeRC = prev; }
+}
+function buildPlanCore(){
   const rows = [];
   let balance = round2(state.startBalance);
   const startD = planStartDate();
@@ -812,6 +895,8 @@ function buildPlan(){
       interim = round2(Math.max(0, interim - mRates - mSpecSum));
       const notes = mSpec.map(b=>`Sonder ${eur.format(b.amount)}${b.amount<b.requested?` (gekappt von ${eur.format(b.requested)})`:''}`);
       if(closing) notes.push(`Schlusszahlung ${eur.format(closing.amount)} – getilgt ✓`);
+      const rcHit = _activeRC.find(c=>c.d >= m && c.d <= mEnd);
+      if(rcHit) notes.push(`${rcHit.auto?'Ratensenkung':'Ratenänderung'}: neue Rate ${eur.format(rcHit.rate)} ab ${dFmt.format(rcHit.d)}`);
       if(isLast && q.note) notes.unshift(q.note);
       rows.push({
         period: m.toLocaleDateString('de-AT',{month:'short',year:'numeric'}),
@@ -909,7 +994,15 @@ function updateInputSummaryCards(){
   const nomCard = qs('#kpiNominalCard');
   if(nomCard) nomCard.textContent = pct.format(Number(state.interestRate || 0));
   const rateCard = qs('#kpiRateCard');
-  if(rateCard) rateCard.textContent = eur.format(Number(state.monthlyRate || 0));
+  if(rateCard){
+    const prev = _activeRC;
+    _activeRC = resolveRateChanges();
+    const cur = monthlyRateFor(new Date());
+    _activeRC = prev;
+    rateCard.textContent = eur.format(cur);
+    const sub = rateCard.nextElementSibling;
+    if(sub) sub.textContent = Math.abs(cur - state.monthlyRate) > 0.004 ? `monatlich, aktuell (Start: ${eur.format(state.monthlyRate)})` : 'monatlich';
+  }
 }
 
 // ── TILGUNGSPLAN RENDERN ─────────────────────────────────────────────────────
@@ -1117,6 +1210,12 @@ function calcSavingForSpecial(idx){
 }
 
 function updateSpecialSavings(){
+  const rcAll = resolveRateChanges();
+  qsa('#specialList [data-ratecut-idx]').forEach(el=>{
+    const p = state.specialPayments[Number(el.dataset.ratecutIdx)];
+    const c = p && p.mode==='rate' ? rcAll.find(x=>x.src===p) : null;
+    el.textContent = c ? `→ neue Rate ca. ${eur.format(c.rate)} ab ${dFmt.format(c.d)}` : (p && p.mode==='rate' ? '→ Ratensenkung nicht berechenbar' : '');
+  });
   qsa('#specialList [data-status-idx]').forEach(el=>{
     const p = state.specialPayments[Number(el.dataset.statusIdx)];
     const valid = p && isValidIsoDate(p.date);
@@ -1143,13 +1242,17 @@ function renderSpecials(){
       <div class="field"><label>Datum (Valuta)</label><input type="date" value="${escHtml(item.date)}" data-kind="date" data-idx="${idx}"></div>
       <div class="field"><label>Betrag (€)</label><input type="number" step="0.01" min="0" value="${escHtml(item.amount)}" data-kind="amount" data-idx="${idx}"></div>
       <div class="field"><label>Kommentar</label><input type="text" value="${escHtml(item.note)}" data-kind="note" data-idx="${idx}"></div>
+      <div class="field"><label>Wirkung</label><select data-kind="mode" data-idx="${idx}">
+        <option value="laufzeit"${item.mode==='rate'?'':' selected'}>Laufzeit verkürzen</option>
+        <option value="rate"${item.mode==='rate'?' selected':''}>Rate senken</option>
+      </select></div>
       <button class="btn danger-btn" data-remove="${idx}" style="align-self:end" aria-label="Sondertilgung löschen">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
       </button>
-      <div class="special-meta"><span class="special-status" data-status-idx="${idx}"></span><span class="special-saving" data-saving-idx="${idx}" style="display:none"></span></div>`;
+      <div class="special-meta"><span class="special-status" data-status-idx="${idx}"></span><span class="special-saving" data-saving-idx="${idx}" style="display:none"></span><span class="special-ratecut" data-ratecut-idx="${idx}"></span></div>`;
     wrap.appendChild(row);
   });
-  wrap.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',e=>{
+  wrap.querySelectorAll('input,select').forEach(inp=>inp.addEventListener('input',e=>{
     const idx=Number(e.target.dataset.idx), kind=e.target.dataset.kind;
     state.specialPayments[idx][kind]=kind==='amount'?Number(e.target.value||0):e.target.value;
     scheduleRecompute(); saveToStorage(true);
@@ -1164,6 +1267,51 @@ function renderSpecials(){
     renderSpecials(); recompute(); saveToStorage(true);
   }));
   updateSpecialSavings();
+}
+
+function renderRateChanges(){
+  const wrap = qs('#rateChangeList');
+  if(!wrap) return;
+  wrap.innerHTML = '';
+  (state.rateChanges||[]).forEach((c,idx)=>{
+    const row = document.createElement('div');
+    row.className = 'special-item rate-item';
+    row.innerHTML = `
+      <div class="field"><label>Ab Datum</label><input type="date" value="${escHtml(c.date)}" data-kind="date" data-idx="${idx}"></div>
+      <div class="field"><label>Neue Monatsrate (€)</label><input type="number" step="0.01" min="0" value="${escHtml(c.rate)}" data-kind="rate" data-idx="${idx}"></div>
+      <div class="field"><label>Kommentar</label><input type="text" value="${escHtml(c.note)}" data-kind="note" data-idx="${idx}"></div>
+      <button class="btn danger-btn" data-remove="${idx}" style="align-self:end" aria-label="Ratenänderung löschen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+      </button>`;
+    wrap.appendChild(row);
+  });
+  const auto = document.createElement('div');
+  auto.id = 'rateChangeAuto';
+  wrap.appendChild(auto);
+  wrap.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',e=>{
+    const idx=Number(e.target.dataset.idx), kind=e.target.dataset.kind;
+    state.rateChanges[idx][kind] = kind==='rate' ? Number(e.target.value||0) : e.target.value;
+    scheduleRecompute(); saveToStorage(true);
+  }));
+  wrap.querySelectorAll('[data-remove]').forEach(btn=>btn.addEventListener('click',async e=>{
+    const idx=Number(e.target.closest('[data-remove]').dataset.remove);
+    const c=state.rateChanges[idx];
+    const ok=await confirmModal('Ratenänderung löschen?',`Ratenänderung${c?.rate?` auf ${eur.format(c.rate)}`:''} wirklich löschen?`,'Löschen');
+    if(!ok) return;
+    state.rateChanges.splice(idx,1);
+    renderRateChanges(); recompute(); saveToStorage(true);
+  }));
+  updateAutoRateChanges();
+}
+function updateAutoRateChanges(){
+  const el = qs('#rateChangeAuto');
+  if(!el) return;
+  const auto = resolveRateChanges().filter(c=>c.auto);
+  el.innerHTML = auto.length
+    ? auto.map(c=>`<div class="note ok" style="margin:0">↘ Ab ${dFmt.format(c.d)}: <strong>${eur.format(c.rate)}</strong> – ${escHtml(c.note)} (automatisch)</div>`).join('')
+    : '';
+  el.style.display = auto.length ? 'grid' : 'none';
+  el.style.gap = '.5rem';
 }
 
 // ── INPUTS VERDRAHTEN ────────────────────────────────────────────────────────
@@ -1419,6 +1567,10 @@ function validateInputs(){
     if(state.monthlyRate*3 <= qInterest + (Number(state.quarterFee)||0))
       errors.push(`Monatsrate deckt die Quartalszinsen nicht (ca. ${eur.format(qInterest/3)} pro Monat) \u2013 der Kredit w\u00fcrde wachsen.`);
   }
+  (state.rateChanges||[]).forEach((c,i)=>{
+    if(!isValidIsoDate(c.date)) errors.push(`Ratenänderung ${i+1}: ungültiges oder fehlendes Datum.`);
+    if(!(Number(c.rate)>0)) errors.push(`Ratenänderung ${i+1}: neue Rate muss größer als 0 sein.`);
+  });
   state.specialPayments.forEach((p,i)=>{
     if(!isValidIsoDate(p.date))
       errors.push(`Sondertilgung ${i+1}: ung\u00fcltiges oder fehlendes Datum.`);
@@ -1454,8 +1606,9 @@ function validateInputs(){
   return true;
 }
 function recompute(){
+  if(!validateInputs()){ updateInputSummaryCards(); return; }
+  refreshAutoRateChanges();
   updateInputSummaryCards();
-  if(!validateInputs()) return;
   const rows=buildPlan();
   updateKPIs(rows);
   updateInputSummaryCards();
@@ -1467,6 +1620,7 @@ function recompute(){
   renderZinssimulator();
   renderAnschlusstabelle();
   updateSpecialSavings();
+  updateAutoRateChanges();
   updateStichtag(rows);
   qs('#exportCsv').onclick=()=>exportRows(rows,'kreditrechner-export.csv');
   qs('#downloadPlan').onclick=()=>exportRows(rows,'tilgungsplan.csv');
@@ -1480,7 +1634,7 @@ function saveToStorage(silent=false){
       planStart:state.planStart,
       startBalance:state.startBalance,interestRate:state.interestRate,monthlyRate:state.monthlyRate,
       paymentDay:state.paymentDay,quarterFee:state.quarterFee,years:state.years,
-      calcMode:state.calcMode,specialLimit:state.specialLimit,specialPayments:state.specialPayments,
+      calcMode:state.calcMode,specialLimit:state.specialLimit,specialPayments:state.specialPayments,rateChanges:state.rateChanges,
       interestRate2:state.interestRate2,fixedRateUntil:state.fixedRateUntil
     }};
     localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));
@@ -1493,7 +1647,12 @@ function saveToStorage(silent=false){
 
 function normalizeSpecials(arr){
   return Array.isArray(arr) ? arr.filter(p=>p && typeof p==='object').map(p=>({
-    date: String(p.date ?? ''), amount: Number(p.amount)||0, note: String(p.note ?? '')
+    date: String(p.date ?? ''), amount: Number(p.amount)||0, note: String(p.note ?? ''), mode: p.mode==='rate' ? 'rate' : 'laufzeit'
+  })) : [];
+}
+function normalizeRateChanges(arr){
+  return Array.isArray(arr) ? arr.filter(c=>c && typeof c==='object').map(c=>({
+    date: String(c.date ?? ''), rate: Number(c.rate)||0, note: String(c.note ?? '')
   })) : [];
 }
 
@@ -1514,7 +1673,8 @@ function loadFromStorage(){
       years:s.years??DEFAULT_STATE.years,
       calcMode:s.calcMode??DEFAULT_STATE.calcMode,
       specialLimit:s.specialLimit??0,
-      specialPayments:normalizeSpecials(s.specialPayments)
+      specialPayments:normalizeSpecials(s.specialPayments),
+      rateChanges:normalizeRateChanges(s.rateChanges)
     });
     const savedAt=parsed.savedAt?new Date(parsed.savedAt):null;
     if(savedAt){
@@ -1531,7 +1691,7 @@ function exportJson(){
   const payload={app:'Kreditrechner v4.2.2 – Allgemeiner Kreditrechner',exportedAt:new Date().toISOString(),
     state:{planStart:state.planStart,startBalance:state.startBalance,interestRate:state.interestRate,monthlyRate:state.monthlyRate,
       paymentDay:state.paymentDay,quarterFee:state.quarterFee,years:state.years,
-      calcMode:state.calcMode,specialLimit:state.specialLimit,specialPayments:state.specialPayments,
+      calcMode:state.calcMode,specialLimit:state.specialLimit,specialPayments:state.specialPayments,rateChanges:state.rateChanges,
       interestRate2:state.interestRate2,fixedRateUntil:state.fixedRateUntil}};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const a=document.createElement('a');
@@ -1555,9 +1715,10 @@ function importJson(file){
         monthlyRate:s.monthlyRate??DEFAULT_STATE.monthlyRate,paymentDay:s.paymentDay??DEFAULT_STATE.paymentDay,
         quarterFee:s.quarterFee??DEFAULT_STATE.quarterFee,years:s.years??DEFAULT_STATE.years,
         calcMode:s.calcMode??DEFAULT_STATE.calcMode,specialLimit:s.specialLimit??0,
-        specialPayments:normalizeSpecials(s.specialPayments)
+        specialPayments:normalizeSpecials(s.specialPayments),
+      rateChanges:normalizeRateChanges(s.rateChanges)
       });
-      wireInputs(); renderSpecials(); recompute(); saveToStorage(true);
+      wireInputs(); renderSpecials(); renderRateChanges(); recompute(); saveToStorage(true);
       const el=qs('#importStatus'); el.className='note ok'; el.style.display='';
       el.textContent='✓ Import erfolgreich. Exportiert am: '+(parsed.exportedAt?new Date(parsed.exportedAt).toLocaleString('de-AT'):'unbekannt');
       toast('Einstellungen importiert ✓','ok');
@@ -1798,6 +1959,7 @@ function confirmModal(title, msg, okLabel='Bestätigen', okClass='danger-btn'){
 // ── INIT ─────────────────────────────────────────────────────────────────────
 const wasLoaded=loadFromStorage();
 renderSpecials();
+renderRateChanges();
 wireInputs();
 updateInputSummaryCards();
 setupNav();
@@ -1808,8 +1970,14 @@ if(wasLoaded) toast('Einstellungen wiederhergestellt ✓','ok',2500);
 qs('#addSpecial').addEventListener('click',()=>{
   const _today = new Date();
   const _defDate = _today >= planStartDate() ? localDateStr(_today) : state.planStart;
-  state.specialPayments.push({date:_defDate,amount:0,note:''});
+  state.specialPayments.push({date:_defDate,amount:0,note:'',mode:'laufzeit'});
   renderSpecials(); scheduleRecompute(); saveToStorage(true);
+});
+qs('#addRateChange').addEventListener('click',()=>{
+  if(!Array.isArray(state.rateChanges)) state.rateChanges=[];
+  const _t = new Date();
+  state.rateChanges.push({date: _t >= planStartDate() ? localDateStr(_t) : state.planStart, rate: state.monthlyRate, note: ''});
+  renderRateChanges(); scheduleRecompute(); saveToStorage(true);
 });
 qs('#recalcAll').addEventListener('click',()=>{recompute();toast('Neu berechnet ✓');});
 qs('#manualSave').addEventListener('click',()=>saveToStorage(false));
@@ -1820,7 +1988,7 @@ qs('#clearStorage').addEventListener('click',async ()=>{
   if(!ok) return;
   localStorage.removeItem(STORAGE_KEY);
   state=JSON.parse(JSON.stringify(DEFAULT_STATE));
-  wireInputs(); renderSpecials(); recompute();
+  wireInputs(); renderSpecials(); renderRateChanges(); recompute();
   qs('#saveTime').textContent='Nie gespeichert';
   const d=qs('#lastSavedDisplay'); if(d) d.value='';
   toast('Lokale Daten gelöscht','warn');
