@@ -118,6 +118,12 @@ function run(w){
   check('Ratenänderung ab Datum: Raten davor alt, danach neu', before.every(b=>near(b.amount,831.05)) && after.slice(0,-1).every(b=>near(b.amount,1200)),
     `${before.length} Raten à 831,05, dann ${after.length} Raten ab 1.1.2027`);
 
+  // Kontoauszug-Abgleich: Saldo am Quartalsende = Endsaldo des Quartals; Tag vor Planstart = Startsaldo
+  const ab = inState(std, () => { const full = w.buildFullPlan(); const q2 = full.filter(r=>r.isQ)[1];
+    return {q2end: q2.end, atQ2: w.calcSaldoAtDate(new Date(2026,5,30), full), before: w.calcSaldoAtDate(new Date(2025,11,31), full)}; });
+  check('Abgleich: Saldo am Quartalsende = Quartals-Endsaldo', near(ab.atQ2, ab.q2end, 0.001), `${fmt(ab.atQ2)} / ${fmt(ab.q2end)}`);
+  check('Abgleich: Saldo vor Planstart = Startsaldo', near(ab.before, std.startBalance, 0.001));
+
   // Zielanalyse: übernommene Zusatz-Sondertilgungen erreichen das Ziel
   const zSt = {...std, years: 8};
   const z = inState(zSt, () => {
