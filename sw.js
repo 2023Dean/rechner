@@ -1,6 +1,6 @@
 // Service Worker: App offline verfügbar machen.
 // Seite: zuerst Netz (Updates sofort), offline aus dem Cache. Übrige Dateien: Cache zuerst.
-const CACHE = 'kreditrechner-v4.5';
+const CACHE = 'kreditrechner-v4.6';
 const CORE = ['./', './index.html', './vendor/chart.umd.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon.svg', './icons/apple-touch-icon.png'];
 
@@ -20,7 +20,7 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   if (req.mode === 'navigate') {
     e.respondWith(fetch(req)
-      .then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put('./index.html', copy)); return res; })
+      .then(res => { if(res.ok){ const copy = res.clone(); caches.open(CACHE).then(c => c.put('./index.html', copy)); } return res; })
       .catch(() => caches.match('./index.html')));
     return;
   }

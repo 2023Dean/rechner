@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <title>Kreditrechner – Allgemeiner Annuitätenkreditrechner v4.5</title>
+  <title>Kreditrechner – Allgemeiner Annuitätenkreditrechner v4.6</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
   <!-- Chart.js 4.4.4 lokal (vendor/), Fallback auf CDN falls die Datei fehlt -->
@@ -108,6 +108,8 @@
     .split{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-6)}
     canvas{max-height:300px}
     .special-list{display:grid;gap:var(--space-3)}
+    .special-item input,.special-item select{min-width:0;width:100%}
+    .special-meta>*{overflow-wrap:anywhere}
     .special-item{display:grid;grid-template-columns:1fr 1fr 1.5fr 1fr auto;gap:var(--space-3);align-items:end;padding:var(--space-4);border-radius:var(--radius-lg);background:var(--color-surface-2);border:1px solid rgba(40,37,29,.1)}
     .special-meta{grid-column:1/-1;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-top:-.3rem}
     .special-status{font-size:var(--text-xs);font-weight:700;padding:.15rem .55rem;border-radius:999px}
@@ -188,7 +190,7 @@
       .stat strong{font-size:1.2rem}
       .hero,.grid-2,.split,.stack{gap:var(--space-4)}
       .form-grid{grid-template-columns:1fr}
-      .special-item{grid-template-columns:1fr 1fr;gap:var(--space-2)}
+      .special-item,.stmt-item,.rp-item{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2)}
       .special-item .field:nth-child(3){grid-column:1/-1}
       /* Tabelle: horizontal scrollbar, kompakte Schrift */
       .table-wrap{-webkit-overflow-scrolling:touch;border-radius:var(--radius-md)}
@@ -375,7 +377,7 @@
       <section class="hero tab-panel" id="panel-dashboard">
         <article class="card">
           <div class="section-title">
-            <div><span class="tag">v4.5 – Allgemeiner Kreditrechner</span><h3>Annuitätenkreditrechner</h3></div>
+            <div><span class="tag">v4.6 – Allgemeiner Kreditrechner</span><h3>Annuitätenkreditrechner</h3></div>
             <span class="accuracy-badge">✓ Banknahe Zinslogik</span>
           </div>
           <p>Quartalsweise Zinsabrechnung (1. bis letzter Quartalstag), konfigurierbarer Zahlungstag mit Wochenendregel, optionale Quartalsgebühr. Sondertilgungen ab Valutadatum zinssenkend. Optionaler Folgezins nach Fixzinsende konfigurierbar.</p>
@@ -458,6 +460,8 @@
             <div class="field"><label>Vertragsjahr beginnt am <span style="font-weight:400;text-transform:none;color:var(--color-text-faint)">leer = Planstart</span></label><input id="limitYearStart" type="date"></div>
             <div class="field"><label>Vorfälligkeitsentschädigung (%) <span style="font-weight:400;text-transform:none;color:var(--color-text-faint)">auf Betrag über Limit</span></label><input id="vfeRate" type="number" step="0.05" min="0"></div>
             <div class="field"><label>VFE nur in Fixzinsperiode</label><label class="rp-check"><input id="vfeOnlyFixed" type="checkbox"> ja (variabel: keine VFE)</label></div>
+            <div class="field"><label>VFE-Deckel 1 % / 0,5 %</label><label class="rp-check"><input id="vfeCap" type="checkbox"> anwenden (Staffel lt. VKrG – Vertrag prüfen)</label></div>
+            <div class="field"><label>Zinsvortrag 1. Quartal (€) <span style="font-weight:400;text-transform:none;color:var(--color-text-faint)">vor Planstart aufgelaufen</span></label><input id="accruedInterest" type="number" step="0.01" min="0"></div>
             <div class="field"><label>Fixzins-Ende <span style="font-weight:400;text-transform:none;color:var(--color-text-faint)">letzter Tag Fixperiode</span></label><input id="fixedRateUntil" type="date"></div>
             <div class="field"><label>Folgezins p.a. (%) <span style="font-weight:400;text-transform:none;color:var(--color-text-faint)">ab Folgetag</span></label><input id="interestRate2" type="number" step="0.01" min="0" inputmode="decimal"></div>
           </div>
@@ -760,6 +764,8 @@ const DEFAULT_STATE = {
   limitYearStart:'',      // Beginn Vertragsjahr (leer = Planstart)
   vfeRate:0.01,           // Vorfälligkeitsentschädigung auf den Betrag über dem Limit (dezimal)
   vfeOnlyFixed:true,      // VFE nur während der Fixzinsperiode
+  vfeCap:false,           // VFE nach VKrG-Staffel deckeln (1 % / 0,5 %)
+  accruedInterest:0,      // Zinsvortrag: vor Planstart aufgelaufene, erst am Quartalsende gebuchte Zinsen
   holidays:'at'           // 'at' = österreichische Feiertage/Bankschließtage beim Zahlungstag, 'none' = nur Wochenende
 };
 
@@ -865,8 +871,9 @@ const FULL_TERM_YEARS = 60;
 // Quartalsgebühr mit +3 % p.a. ab jedem vollen Vertragsjahr seit Planstart
 function feeFor(qStart){
   const ps = planStartDate();
-  const months = (qStart.getFullYear()-ps.getFullYear())*12 + qStart.getMonth()-ps.getMonth();
-  return round2((Number(state.quarterFee)||0) * Math.pow(1.03, Math.max(0, Math.floor(months/12))));
+  let years = qStart.getFullYear() - ps.getFullYear();
+  if(qStart < new Date(qStart.getFullYear(), ps.getMonth(), ps.getDate())) years--; // erst ab dem Jahrestag
+  return round2((Number(state.quarterFee)||0) * Math.pow(1.03, Math.max(0, years)));
 }
 
 // ── SONDERTILGUNGEN ──────────────────────────────────────────────────────────
@@ -880,13 +887,13 @@ function specialsInRange(from, to){
 // Zinslauf ab max(Quartalsbeginn, Planstart) bis Quartalsende inkl.; Zahlungen werden
 // auf die Restschuld gekappt; wird der Kredit im Quartal getilgt, werden die offenen
 // Quartalszinsen + Gebühr als Schlusszahlung am Quartalsende gebucht.
-function calcQuarterRow(qStart, qEnd, begin, periodStart){
+function calcQuarterRow(qStart, qEnd, begin, periodStart, carryInterest=0){
   const pStart = periodStart && periodStart > qStart ? periodStart : qStart;
   const events = [];
   for(let i=0;i<3;i++){
     const mo = new Date(qStart.getFullYear(), qStart.getMonth()+i, 1);
     const d = paymentDateFor(mo.getFullYear(), mo.getMonth());
-    if(d >= pStart) events.push({date:d, amount:monthlyRateFor(d), kind:'rate', month:mo.getMonth()});
+    if(d >= pStart && d <= qEnd) events.push({date:d, amount:monthlyRateFor(d), kind:'rate', month:mo.getMonth()});
   }
   specialsInRange(pStart, qEnd).forEach(p => {
     const d = toDate(p.date);
@@ -931,7 +938,7 @@ function calcQuarterRow(qStart, qEnd, begin, periodStart){
       interest += Math.max(0,bal) * rateForDate(from)/12 * (daysBetween(from, mE)+1)/mE.getDate();
     }
   }
-  interest = round2(interest);
+  interest = round2(interest + carryInterest); // Zinsvortrag (bereits aufgelaufene Quartalszinsen vor Planstart)
   const fee = feeFor(qStart);
   let end = round2(principal + interest + fee);
   if(payoffDate){
@@ -942,14 +949,14 @@ function calcQuarterRow(qStart, qEnd, begin, periodStart){
   const special = round2(bookings.filter(b=>b.kind==='special').reduce((s,b)=>s+b.amount,0));
 
   const fmtP = r => (r*100).toLocaleString('de-AT',{minimumFractionDigits:2, maximumFractionDigits:3}) + ' %';
-  const changes = [...new Set(rateBreakDays().filter(b => b >= qStart && b <= qEnd).map(b=>b.getTime()))]
+  const changes = _fast ? [] : [...new Set(rateBreakDays().filter(b => b >= qStart && b <= qEnd).map(b=>b.getTime()))]
     .map(ms => new Date(ms))
     .filter(b => rateForDate(addDays(b,-1)) !== rateForDate(b))
     .map(b => `⚡ Zinsänderung ab ${dFmt.format(b)}: ${fmtP(rateForDate(addDays(b,-1)))} → ${fmtP(rateForDate(b))}`);
   return {
     from: qStart, to: qEnd, begin, rates, special, fee, interest, end, bookings, payoffDate,
     isRateBreak: changes.length > 0,
-    note: changes.length ? changes.join(' · ') : null
+    note: [...changes, ...(carryInterest ? [`inkl. Zinsvortrag ${eur.format(carryInterest)} (aufgelaufen vor Planstart)`] : [])].join(' · ') || null
   };
 }
 
@@ -970,24 +977,28 @@ function manualRateChanges(){
 // Manuelle Ratenänderungen + automatisch berechnete Ratensenkungen nach Sondertilgungen
 // mit Wirkung "Rate senken": niedrigste Rate (auf Cent), mit der der Kredit spätestens
 // zum bisherigen Termin (ohne diese Sondertilgung) getilgt ist.
-const _rcCache = new Map();
 let _autoRC = []; // einmal pro recompute bestimmt, in Nebenrechnungen wiederverwendet
 function resolveRateChanges(){
   const manual = manualRateChanges().map(c=>({...c, d:toDate(c.date)}));
-  const auto = [];
+  const auto = [], used = new Set();
+  const findSrc = s => {
+    const list = s.kind==='period' ? (state.ratePeriods||[]) : state.specialPayments;
+    const hit = list.find(p => !used.has(p) && p.date===s.date && (s.kind==='period'
+      ? p.adjust && periodRate(p)===s.rate : p.mode==='rate' && Number(p.amount)===s.amount));
+    if(hit) used.add(hit);
+    return hit;
+  };
   _autoRC.forEach(a => {
-    const src = a.srcKind==='period'
-      ? (state.ratePeriods||[]).find(p=>p.adjust && p.date===a.srcDate && periodRate(p)===a.srcRate)
-      : state.specialPayments.find(p=>p.mode==='rate' && p.date===a.srcDate && Number(p.amount)===a.srcAmount);
-    if(src) auto.push({date:a.date, rate:a.rate, note:a.note, auto:true, src, d:toDate(a.date)});
+    const found = a.srcs.map(findSrc);
+    if(found.every(Boolean)) auto.push({date:a.date, rate:a.rate, note:a.note, auto:true, src:found[0], srcs:found, d:toDate(a.date)});
   });
   return [...manual, ...auto].sort((a,b)=>a.d-b.d);
 }
 function refreshAutoRateChanges(){
-  _autoRC = computeRateChanges().filter(c=>c.auto)
-    .map(c=>({date:c.date, rate:c.rate, note:c.note, srcKind:c.srcKind, srcDate:c.src.date,
-              srcAmount:Number(c.src.amount), srcRate: c.srcKind==='period' ? periodRate(c.src) : null}));
+  _autoRC = computeRateChanges().filter(c=>c.auto).map(c=>({date:c.date, rate:c.rate, note:c.note,
+    srcs: c.srcs.map(s=>({kind:s.kind, date:s.src.date, amount:Number(s.src.amount), rate: s.kind==='period' ? periodRate(s.src) : null}))}));
 }
+const _rcEventCache = new Map();
 function computeRateChanges(){
   const toRC = list => list.map(c=>({...c, d:toDate(c.date)})).sort((a,b)=>a.d-b.d);
   const manual = toRC(manualRateChanges());
@@ -998,54 +1009,66 @@ function computeRateChanges(){
     ...(state.ratePeriods||[])
       .filter(p=>p.adjust && isValidIsoDate(p.date) && toDate(p.date) >= planStartDate())
       .map(p=>({kind:'period', src:p, d:toDate(p.date), from:toDate(p.date)}))
-  ].sort((a,b)=>a.d-b.d);
+  ];
   if(!items.length) return manual;
-  const key = JSON.stringify([state.planStart,state.startBalance,state.interestRate,state.interestRate2,state.fixedRateUntil,
-    state.monthlyRate,state.paymentDay,state.quarterFee,state.calcMode,state.specialPayments,state.rateChanges,state.ratePeriods]);
-  if(_rcCache.has(key)){
-    return _rcCache.get(key).map(c=>({...c, d:new Date(c.d),
-      src: c.srcIdx>=0 ? (c.srcKind==='period' ? state.ratePeriods[c.srcIdx] : state.specialPayments[c.srcIdx]) : undefined}));
-  }
-  const full = (ov, list) => runWithState(Object.assign(cloneState(state), {years: FULL_TERM_YEARS}, ov), () => buildPlanWith(list));
+  // Ereignisse mit gleichem Wirkungstag gemeinsam: eine Neuberechnung der Rate
+  const groups = new Map();
+  items.forEach(it => { const k = it.from.getTime(); if(!groups.has(k)) groups.set(k, []); groups.get(k).push(it); });
+  const base = [state.planStart,state.startBalance,state.interestRate,state.interestRate2,state.fixedRateUntil,state.monthlyRate,
+    state.paymentDay,state.quarterFee,state.calcMode,state.holidays,state.accruedInterest];
+  const full = (ov, list) => runWithState(Object.assign(cloneState(state), {years: FULL_TERM_YEARS}, ov), () => buildPlanWith(list, true));
+  const fmtP = r => (r*100).toLocaleString('de-AT',{minimumFractionDigits:2, maximumFractionDigits:3});
   let rc = manual;
-  for(const it of items){
-    // Wie die Bank: nur bekannt ist, was bis zu diesem Tag feststeht (keine künftigen
-    // Sondertilgungen, Zinsperioden oder Ratenänderungen). Zieltermin = Kreditende ohne dieses Ereignis.
+  for(const [fromMs, group] of [...groups.entries()].sort((a,b)=>a[0]-b[0])){
+    const from = new Date(fromMs);
+    // Wie die Bank: bekannt ist nur, was bis zu diesem Tag feststeht.
     const known = {
-      specialPayments: state.specialPayments.filter(p=>isValidIsoDate(p.date) && toDate(p.date) <= it.d),
-      ratePeriods: (state.ratePeriods||[]).filter(p=>isValidIsoDate(p.date) && toDate(p.date) <= it.d)
+      specialPayments: state.specialPayments.filter(p=>isValidIsoDate(p.date) && toDate(p.date) < from),
+      ratePeriods: (state.ratePeriods||[]).filter(p=>isValidIsoDate(p.date) && toDate(p.date) <= from)
     };
-    const without = it.kind==='special'
-      ? {...known, specialPayments: known.specialPayments.filter(p=>p!==it.src)}
-      : {...known, ratePeriods: known.ratePeriods.filter(p=>p!==it.src)};
-    const rcKnown = rc.filter(c=>c.d < it.from);
-    const P = payoffOf(full(without, rcKnown));
-    if(!P) continue;
-    const date = localDateStr(it.from);
-    const tryRate = r => toRC([...rcKnown, {date, rate:r}]);
-    const reaches = r => { const po = payoffOf(full(known, tryRate(r))); return po && po <= P; };
-    let lo = 0, hi = monthlyRateFor(it.from, rcKnown), k = 0;
-    while(!reaches(hi) && k++ < 12){ lo = hi; hi = Math.ceil(hi*1.5*100)/100; }
-    if(!reaches(hi)) continue;
-    for(let i=0; i<40 && hi-lo >= 0.01; i++){ const mid = Math.ceil((lo+hi)/2*100)/100; if(reaches(mid)) hi = mid; else lo = mid; }
-    const note = it.kind==='special'
-      ? `Ratensenkung nach Sondertilgung ${eur.format(Number(it.src.amount))} vom ${dFmt.format(it.d)}`
-      : `Ratenanpassung wegen Zinsänderung auf ${(periodRate(it.src)*100).toLocaleString('de-AT',{minimumFractionDigits:2, maximumFractionDigits:3})} % ab ${dFmt.format(it.d)}`;
-    rc = toRC([...rc, {date, rate:hi, auto:true, src:it.src, srcKind:it.kind, note}]);
+    const srcs = new Set(group.map(g=>g.src));
+    const without = {specialPayments: known.specialPayments.filter(p=>!srcs.has(p)), ratePeriods: known.ratePeriods.filter(p=>!srcs.has(p))};
+    const rcKnown = rc.filter(c=>c.d < from || (!c.auto && c.d <= from));
+    const key = JSON.stringify([base, known, rcKnown.map(c=>[c.date,c.rate]), group.map(g=>[g.kind, g.src.date, g.kind==='special' ? Number(g.src.amount) : periodRate(g.src)])]);
+    let rate;
+    if(_rcEventCache.has(key)) rate = _rcEventCache.get(key);
+    else {
+      rate = null;
+      const date = localDateStr(from);
+      const withRows = full(known, rcKnown);
+      const P = payoffOf(full(without, rcKnown));
+      if(P && calcSaldoAtDate(from, withRows) > 0){ // nach der Tilgung keine Anpassung
+        const tryRate = r => toRC([...rcKnown, {date, rate:r}]);
+        const reaches = r => { const po = payoffOf(full(known, tryRate(r))); return po && po <= P; };
+        let lo = 0, hi = monthlyRateFor(from, rcKnown), k = 0;
+        while(!reaches(hi) && k++ < 12){ lo = hi; hi = Math.ceil(hi*1.5*100)/100; }
+        if(reaches(hi)){
+          for(let i=0; i<40 && hi-lo >= 0.01; i++){ const mid = Math.ceil((lo+hi)/2*100)/100; if(reaches(mid)) hi = mid; else lo = mid; }
+          rate = hi;
+        }
+      }
+      if(_rcEventCache.size > 500) _rcEventCache.clear();
+      _rcEventCache.set(key, rate);
+    }
+    if(rate === null) continue;
+    const notes = group.map(g => g.kind==='special'
+      ? `Ratensenkung nach Sondertilgung ${eur.format(Number(g.src.amount))} vom ${dFmt.format(g.d)}`
+      : `Ratenanpassung wegen Zinsänderung auf ${fmtP(periodRate(g.src))} % ab ${dFmt.format(g.d)}`);
+    rc = toRC([...rc, {date: localDateStr(from), rate, auto:true, src:group[0].src, srcs:group.map(g=>({kind:g.kind, src:g.src})), note: notes.join(' + ')}]);
   }
-  if(_rcCache.size > 200) _rcCache.clear();
-  _rcCache.set(key, rc.map(c=>({...c, d:c.d.getTime(), src:undefined,
-    srcIdx: c.src ? (c.srcKind==='period' ? state.ratePeriods.indexOf(c.src) : state.specialPayments.indexOf(c.src)) : -1})));
   return rc;
 }
-function buildPlan(){
-  return buildPlanWith(resolveRateChanges());
+function buildPlan(fast=false){
+  return buildPlanWith(resolveRateChanges(), fast);
 }
-function buildPlanWith(rc){
-  const prev = _activeRC, prevRP = _activeRP;
+// fast=true: nur Quartalszeilen ohne Texte (für interne Nebenrechnungen)
+let _fast = false;
+function buildPlanWith(rc, fast=false){
+  const prev = _activeRC, prevRP = _activeRP, prevFast = _fast;
   _activeRC = rc;
   _activeRP = validRatePeriods();
-  try { return buildPlanCore(); } finally { _activeRC = prev; _activeRP = prevRP; }
+  _fast = fast;
+  try { return buildPlanCore(); } finally { _activeRC = prev; _activeRP = prevRP; _fast = prevFast; }
 }
 function buildPlanCore(){
   const rows = [];
@@ -1055,7 +1078,15 @@ function buildPlanCore(){
   let qS = quarterStart(startD);
   for(let qi=0; qi<nQ; qi++){
     const qE = quarterEnd(qS);
-    const q = calcQuarterRow(qS, qE, balance, startD);
+    const q = calcQuarterRow(qS, qE, balance, startD, qi===0 ? (Number(state.accruedInterest)||0) : 0);
+    if(_fast){
+      rows.push({isQ:true, isMid:false, from:q.from, qFrom:q.from, to:qE, begin:balance, rates:q.rates, special:q.special,
+        qSpecial:q.special, fee:q.fee, interest:q.interest, end:q.end, bookings:q.bookings, payoffDate:q.payoffDate});
+      balance = q.end;
+      if(balance <= 0) break;
+      qS = new Date(qE.getFullYear(), qE.getMonth()+1, 1);
+      continue;
+    }
     let interim = balance;
     for(let mIdx=0; mIdx<3; mIdx++){
       const m = new Date(qS.getFullYear(), qS.getMonth()+mIdx, 1);
@@ -1110,7 +1141,12 @@ function buildPlanCore(){
 function buildFullPlan(overrides={}){
   const tmp = cloneState(state);
   Object.assign(tmp, overrides, {years: FULL_TERM_YEARS});
-  return runWithState(tmp, buildPlan);
+  return runWithState(tmp, () => buildPlan(true));
+}
+// Wie buildFullPlan, aber automatische Ratenanpassungen für die geänderte Variante neu bestimmt
+function buildFullPlanFresh(overrides={}){
+  const tmp = Object.assign(cloneState(state), overrides, {years: FULL_TERM_YEARS});
+  return runWithState(tmp, () => buildPlanWith(computeRateChanges(), true));
 }
 function sumInterest(rows){ return round2(rows.filter(r=>r.isQ).reduce((s,r)=>s+r.interest,0)); }
 function payoffOf(rows){ const r = rows.find(x=>x.isQ && x.end<=0); return r ? (r.payoffDate || r.to) : null; }
@@ -1118,7 +1154,7 @@ function payoffOf(rows){ const r = rows.find(x=>x.isQ && x.end<=0); return r ? (
 // Effektivzins: XIRR (act/365) über alle tatsächlichen Zahlungen ohne Sondertilgungen
 // bis zur vollständigen Tilgung; offene Restschuld als Schluss-Cashflow.
 function calcEffektivzins(){
-  const rows = buildFullPlan({specialPayments: []});
+  const rows = buildFullPlanFresh({specialPayments: []});
   const t0 = planStartDate();
   const cfs = [{t:0, a:-state.startBalance}];
   rows.filter(r=>r.isQ).forEach(r => r.bookings.forEach(b => { if(b.amount) cfs.push({t:daysBetween(t0,b.date)/365, a:b.amount}); }));
@@ -1148,7 +1184,7 @@ function updateKPIs(rows){
 
   // Zinsersparnis durch Sondertilgungen – über die gesamte Laufzeit bis zur Tilgung
   const fullWith = buildFullPlan();
-  const fullWithout = buildFullPlan({specialPayments: []});
+  const fullWithout = buildFullPlanFresh({specialPayments: []});
   const saving = round2(sumInterest(fullWithout) - sumInterest(fullWith));
   qs('#kpiSaving').textContent = saving > 0 ? '−' + eur.format(saving) : eur.format(0);
 
@@ -1238,7 +1274,7 @@ const markerPlugin = {
 function renderCharts(rows){
   if(!window.Chart) return; // ohne Chart.js weiterrechnen, nur keine Diagramme
   const qRows = rows.filter(r => r.isQ); // nur Quartalsabschlüsse
-  const ohne = runWithState(Object.assign(cloneState(state), {specialPayments: []}), buildPlan).filter(r => r.isQ);
+  const ohne = runWithState(Object.assign(cloneState(state), {specialPayments: []}), () => buildPlanWith(computeRateChanges())).filter(r => r.isQ);
   const axisRows = ohne.length > qRows.length ? ohne : qRows;
   const labels = axisRows.map(r => qLabel(r.qFrom || r.from));
   const pad = (arr, fn) => axisRows.map((_, i) => i < arr.length ? fn(arr[i]) : null);
@@ -1389,12 +1425,15 @@ function limitPeriodOf(d){
 }
 // VFE-Satz am Tag d: vertraglicher Satz, gedeckelt (HIKrG) mit 1 % bzw. 0,5 % bei
 // Rest-Fixzinszeit bis 1 Jahr; im variablen Zeitraum optional keine VFE.
+// VFE-Satz am Tag d: vertraglicher Satz; optional gedeckelt nach der VKrG-Staffel
+// (1 %, bzw. 0,5 % bei Rest-Fixzinszeit bis 1 Jahr); im variablen Zeitraum optional keine VFE.
 function vfePctAt(d){
   const rate = Math.max(0, Number(state.vfeRate)||0);
   const fixEnd = state.fixedRateUntil ? toDate(state.fixedRateUntil) : null;
   const variable = (fixEnd && d > fixEnd) || validRatePeriods().some(p=>p.d <= d);
-  if(variable) return state.vfeOnlyFixed === false ? Math.min(rate, 0.01) : 0;
-  const cap = fixEnd && (fixEnd - d) <= 365*864e5 ? 0.005 : 0.01;
+  if(variable && state.vfeOnlyFixed !== false) return 0;
+  if(!state.vfeCap) return rate;
+  const cap = !variable && fixEnd && (fixEnd - d) <= 365*864e5 ? 0.005 : 0.01;
   return Math.min(rate, cap);
 }
 // Auswertung der tatsächlich verbuchten Sondertilgungen je Limitjahr
@@ -1450,15 +1489,16 @@ function calcSavingForSpecial(idx){
   const item = state.specialPayments[idx];
   if(!item || !(Number(item.amount) > 0)) return 0;
   const mit  = sumInterest(buildFullPlan());
-  const ohne = sumInterest(buildFullPlan({specialPayments: state.specialPayments.filter((_,i)=>i!==idx)}));
+  const ohne = sumInterest(buildFullPlanFresh({specialPayments: state.specialPayments.filter((_,i)=>i!==idx)}));
   return round2(ohne - mit);
 }
 
+let _savingsStale = false;
 function updateSpecialSavings(){
   const rcAll = resolveRateChanges();
   qsa('#specialList [data-ratecut-idx]').forEach(el=>{
     const p = state.specialPayments[Number(el.dataset.ratecutIdx)];
-    const c = p && p.mode==='rate' ? rcAll.find(x=>x.src===p) : null;
+    const c = p && p.mode==='rate' ? rcAll.find(x=>x.auto && x.srcs.includes(p)) : null;
     el.textContent = c ? `→ neue Rate ca. ${eur.format(c.rate)} ab ${dFmt.format(c.d)}` : (p && p.mode==='rate' ? '→ Ratensenkung nicht berechenbar' : '');
   });
   qsa('#specialList [data-status-idx]').forEach(el=>{
@@ -1468,14 +1508,25 @@ function updateSpecialSavings(){
     el.textContent = !valid ? 'Datum fehlt' : done ? '✓ erfolgt' : 'geplant';
     el.className = 'special-status ' + (!valid ? 'warn' : done ? 'done' : 'planned');
   });
-  qsa('#specialList [data-saving-idx]').forEach(el=>{
+  // Ersparnis je Sondertilgung ist aufwendig: nur rechnen, wenn der Tab sichtbar ist
+  _savingsStale = qs('#panel-sonder').hidden;
+  if(_savingsStale) return;
+  // schrittweise, damit die Seite bedienbar bleibt; neuer Aufruf bricht den alten ab
+  const gen = ++_savingsGen;
+  const els = qsa('#specialList [data-saving-idx]');
+  const step = i => {
+    if(gen !== _savingsGen || i >= els.length) return;
+    const el = els[i];
     const saving = calcSavingForSpecial(Number(el.dataset.savingIdx));
     el.innerHTML = saving > 0
       ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Spart ca. ${eur.format(saving)} Zinsen über die Laufzeit`
       : '';
     el.style.display = saving > 0 ? '' : 'none';
-  });
+    setTimeout(() => step(i+1), 0);
+  };
+  step(0);
 }
+let _savingsGen = 0;
 
 function renderSpecials(){
   const wrap=qs('#specialList');
@@ -1585,7 +1636,7 @@ function buildPrintReport(){
   const stm = validStatements().map(s=>{ const d=toDate(s.date); const c=calcSaldoAtDate(d, full); return [dFmt.format(d), eur.format(s.balance), eur.format(c), eur.format(round2(s.balance-c)), escHtml(s.note)]; });
   qs('#printReport').innerHTML = `
     <h1>Kreditübersicht</h1>
-    <div class="sub">Stand ${dFmt.format(new Date())} · Kreditrechner v4.5 · ${modeLbl}, quartalsweise Zinsabrechnung · alle Werte ohne Gewähr</div>
+    <div class="sub">Stand ${dFmt.format(new Date())} · Kreditrechner v4.6 · ${modeLbl}, quartalsweise Zinsabrechnung · alle Werte ohne Gewähr</div>
     <h2>Eckdaten</h2>
     <div class="kv">
       <div><span>Planstart</span><span>${dFmt.format(planStartDate())}</span></div>
@@ -1596,7 +1647,10 @@ function buildPrintReport(){
       <div><span>Folgezins</span><span>${r2}</span></div>
       <div><span>Zahlungstag</span><span>${state.paymentDay}.</span></div>
       <div><span>Quartalsgebühr</span><span>${eur.format(state.quarterFee||0)}</span></div>
-      <div><span>Sondertilgungslimit p.a.</span><span>${state.specialLimit ? eur.format(state.specialLimit) : 'unbegrenzt'}</span></div>
+      <div><span>Sondertilgungslimit</span><span>${hasLimit() ? eur.format(state.specialLimit) + (state.limitBasis==='contract' ? ' je Vertragsjahr' : ' je Kalenderjahr') : 'unbegrenzt'}</span></div>
+      <div><span>Vorfälligkeitsentsch.</span><span>${pct.format(state.vfeRate||0)}${state.vfeCap ? ' (gedeckelt)' : ''}${state.vfeOnlyFixed!==false ? ', nur Fixzins' : ''}</span></div>
+      <div><span>Feiertage</span><span>${state.holidays==='none' ? 'nur Wochenende' : 'Österreich'}</span></div>
+      ${state.accruedInterest ? `<div><span>Zinsvortrag 1. Quartal</span><span>${eur.format(state.accruedInterest)}</span></div>` : ''}
     </div>
     <h2>Kennzahlen</h2>
     <div class="kv">
@@ -1622,11 +1676,13 @@ function buildPrintReport(){
 }
 function printReport(){
   // Charts müssen sichtbar und gerendert sein, damit sie als Bild in den Bericht kommen
+  const prevTab = qs('.nav button.active')?.dataset.tab || 'dashboard';
   switchTab('dashboard');
   setTimeout(() => {
     [balanceChart, flowChart].forEach(c => { if(c){ c.resize(); c.update('none'); } });
     buildPrintReport();
     window.print();
+    switchTab(prevTab);
   }, 200);
 }
 
@@ -1668,11 +1724,22 @@ function renderStatements(){
     const s = state.statements[Number(e.target.closest('[data-anchor]').dataset.anchor)];
     if(!s || !isValidIsoDate(s.date) || !(Number(s.balance)>0)){ toast('Bitte gültiges Datum und Saldo eintragen','warn'); return; }
     const ok = await confirmModal('Rechner neu ausrichten?',
-      `Planstart wird auf ${dFmt.format(addDays(toDate(s.date),1))} (Tag nach dem Auszug) und der Startsaldo auf ${eur.format(Number(s.balance))} gesetzt (bisher ${dFmt.format(planStartDate())} / ${eur.format(state.startBalance)}). Sondertilgungen und Ratenänderungen vor diesem Datum werden nicht mehr verrechnet. Tipp: vorher JSON exportieren.`,
+      `Planstart wird auf ${dFmt.format(addDays(toDate(s.date),1))} (Tag nach dem Auszug) und der Startsaldo auf ${eur.format(Number(s.balance))} gesetzt; bereits aufgelaufene Quartalszinsen werden als Zinsvortrag übernommen (bisher ${dFmt.format(planStartDate())} / ${eur.format(state.startBalance)}). Sondertilgungen und Ratenänderungen vor diesem Datum werden nicht mehr verrechnet. Tipp: vorher JSON exportieren.`,
       'Übernehmen','primary');
     if(!ok) return;
-    state.planStart = localDateStr(addDays(toDate(s.date),1)); // Auszugssaldo gilt zum Tagesende
+    // Bereits aufgelaufene, erst am Quartalsende gebuchte Zinsen als Zinsvortrag übernehmen
+    const d = toDate(s.date), newStart = addDays(d,1);
+    let carry = 0;
+    if(newStart.getTime() !== quarterStart(newStart).getTime()){
+      const full = buildFullPlan(), qS = quarterStart(d);
+      const begin = qS <= planStartDate() ? round2(state.startBalance) : calcSaldoAtDate(addDays(qS,-1), full);
+      _activeRC = resolveRateChanges(); _activeRP = validRatePeriods();
+      try { carry = calcQuarterRow(qS, d, begin, planStartDate(), qS <= planStartDate() ? (Number(state.accruedInterest)||0) : 0).interest; }
+      finally { _activeRC = []; _activeRP = null; }
+    }
+    state.planStart = localDateStr(newStart); // Auszugssaldo gilt zum Tagesende
     state.startBalance = round2(Number(s.balance));
+    state.accruedInterest = round2(carry);
     wireInputs(); recompute(); saveToStorage(true);
     toast('Planstart und Startsaldo übernommen ✓','ok');
   }));
@@ -1747,7 +1814,7 @@ function updateRatePeriodInfo(){
   qsa('#ratePeriodList [data-rp-idx]').forEach(el=>{
     const p = (state.ratePeriods||[])[Number(el.dataset.rpIdx)];
     if(!p){ el.textContent=''; return; }
-    const a = rc.find(c=>c.src===p);
+    const a = rc.find(c=>c.auto && c.srcs.includes(p));
     el.textContent = `Sollzins ${fmtP(periodRate(p))}` + (p.adjust ? (a ? ` · neue Rate ca. ${eur.format(a.rate)} ab ${dFmt.format(a.d)}` : ' · Rate unverändert/nicht berechenbar') : ' · Rate bleibt');
   });
   const g = qs('#rpgStart');
@@ -1820,7 +1887,7 @@ function updateAutoRateChanges(){
 
 // ── INPUTS VERDRAHTEN ────────────────────────────────────────────────────────
 const NUM_FIELDS={startBalance:'startBalance',interestRate:'interestRate',monthlyRate:'monthlyRate',
-  paymentDay:'paymentDay',quarterFee:'quarterFee',years:'years',specialLimit:'specialLimit',interestRate2:'interestRate2',vfeRate:'vfeRate'};
+  paymentDay:'paymentDay',quarterFee:'quarterFee',years:'years',specialLimit:'specialLimit',interestRate2:'interestRate2',vfeRate:'vfeRate',accruedInterest:'accruedInterest'};
 const PCT_FIELDS=new Set(['interestRate','interestRate2','vfeRate']); // Eingabe in %, intern dezimal
 const round6 = n => Math.round(n*1e6)/1e6;
 let _inputsWired=false;
@@ -1835,6 +1902,7 @@ function wireInputs(){
   qs('#limitYearStart').value=state.limitYearStart||'';
   qs('#vfeOnlyFixed').checked=state.vfeOnlyFixed!==false;
   qs('#holidays').value=state.holidays==='none'?'none':'at';
+  qs('#vfeCap').checked=!!state.vfeCap;
   if(_inputsWired) return;
   _inputsWired=true;
   elPS.addEventListener('input',()=>{ state.planStart=elPS.value||'2026-01-01'; scheduleRecompute(); saveToStorage(true); });
@@ -1850,6 +1918,7 @@ function wireInputs(){
   elFix.addEventListener('input',()=>{ state.fixedRateUntil=elFix.value||''; scheduleRecompute(); saveToStorage(true); });
   qs('#limitBasis').addEventListener('input',e=>{ state.limitBasis=e.target.value; scheduleRecompute(); saveToStorage(true); });
   qs('#limitYearStart').addEventListener('input',e=>{ state.limitYearStart=e.target.value||''; scheduleRecompute(); saveToStorage(true); });
+  qs('#vfeCap').addEventListener('input',e=>{ state.vfeCap=e.target.checked; scheduleRecompute(); saveToStorage(true); });
   qs('#holidays').addEventListener('input',e=>{ state.holidays=e.target.value; scheduleRecompute(); saveToStorage(true); });
   qs('#vfeOnlyFixed').addEventListener('input',e=>{ state.vfeOnlyFixed=e.target.checked; scheduleRecompute(); saveToStorage(true); });
 }
@@ -1866,7 +1935,7 @@ function downloadCsv(lines,name){
 function exportRows(rows,name){
   const now=new Date().toLocaleString('de-AT');
   const meta=[
-    [`Kreditrechner v4.5 – Export vom ${now}`],
+    [`Kreditrechner v4.6 – Export vom ${now}`],
     [`Startsaldo:`,csvNum(state.startBalance),`Zinssatz p.a.:`,pct.format(state.interestRate),
      `Monatsrate:`,csvNum(state.monthlyRate),`Planjahre:`,state.years],
     []
@@ -1901,9 +1970,16 @@ function calcOrganicEnd(){
   return payoffOf(buildFullPlan());
 }
 
-function simWithExtra(annualExtra, targetYears){
+// quick=true: nur bis kurz nach dem Zieljahr rechnen (für die Suche, ohne Gesamtzinsen)
+function simWithExtra(annualExtra, targetYears, quick=false){
   const extra = annualExtra > 0 ? zielExtraPayments(annualExtra, targetYears) : [];
-  const rows = buildFullPlan({specialPayments: [...state.specialPayments, ...extra]});
+  const specialPayments = [...state.specialPayments, ...extra];
+  if(quick){
+    const yrs = zielDate(targetYears).getFullYear() - planStartDate().getFullYear() + 2;
+    const rows = runWithState(Object.assign(cloneState(state), {specialPayments, years: yrs}), () => buildPlan(true));
+    return { end: payoffOf(rows), count: extra.length };
+  }
+  const rows = buildFullPlan({specialPayments});
   return { end: payoffOf(rows), totalInterest: sumInterest(rows), count: extra.length };
 }
 
@@ -1914,21 +1990,19 @@ function calcRequiredAnnualSpecial(targetYears){
   if(base.end && base.end <= targetDate){
     return { found: true, annualAmount: 0, endDate: base.end, totalInterest: base.totalInterest, zinsSaving: 0, alreadyReached: true };
   }
-  const maxTry = simWithExtra(state.startBalance, targetYears);
+  const maxTry = simWithExtra(state.startBalance, targetYears, true);
   if(!maxTry.count || !maxTry.end || maxTry.end > targetDate) return { found: false };
 
-  let lo = 0, hi = state.startBalance, best = null;
-  for(let i = 0; i < 60 && hi - lo >= 0.01; i++){
-    const mid = Math.ceil((lo + hi) / 2 * 100) / 100;
-    const sim = simWithExtra(mid, targetYears);
-    if(sim.end && sim.end <= targetDate){
-      best = { annualAmount: mid, endDate: sim.end, totalInterest: sim.totalInterest, count: sim.count };
-      hi = mid;
-    } else {
-      lo = mid;
-    }
+  // Suche auf ganze Euro (aufgerundet)
+  let lo = 0, hi = Math.ceil(state.startBalance), found = false;
+  while(hi - lo > 1){
+    const mid = Math.ceil((lo + hi) / 2);
+    const sim = simWithExtra(mid, targetYears, true);
+    if(sim.end && sim.end <= targetDate){ hi = mid; found = true; } else lo = mid;
   }
-  if(!best) return { found: false };
+  if(!found && !(simWithExtra(hi, targetYears, true).end <= targetDate)) return { found: false };
+  const fullSim = simWithExtra(hi, targetYears);
+  const best = { annualAmount: hi, endDate: fullSim.end, totalInterest: fullSim.totalInterest, count: fullSim.count };
   return {
     found: true, annualAmount: best.annualAmount, endDate: best.endDate, count: best.count,
     totalInterest: best.totalInterest,
@@ -2090,6 +2164,7 @@ function validateInputs(){
     if(Number(c.balance)<0) errors.push(`Kontoauszug ${i+1}: Saldo bitte als positiven Betrag eingeben.`);
   });
   if(state.limitYearStart && !isValidIsoDate(state.limitYearStart)) errors.push('Beginn Vertragsjahr ist kein gültiges Datum.');
+  if(Number(state.accruedInterest) < 0) errors.push('Zinsvortrag darf nicht negativ sein.');
   if(Number(state.vfeRate) < 0 || Number(state.vfeRate) > 0.05) errors.push('Vorfälligkeitsentschädigung muss zwischen 0 % und 5 % liegen.');
   (state.ratePeriods||[]).forEach((c,i)=>{
     if(!isValidIsoDate(c.date)) errors.push(`Zinsperiode ${i+1}: ungültiges oder fehlendes Datum.`);
@@ -2122,8 +2197,8 @@ function validateInputs(){
   if(!box){
     box=document.createElement('div');
     box.id='validationErrors';
-    box.style.cssText='background:#fcebd5;color:#7a3510;border-left:3px solid #964219;'
-      +'border-radius:.5rem;padding:.75rem 1rem;margin-bottom:1rem;font-size:.85rem;display:none;grid-column:1/-1;';
+    box.className='note warn';
+    box.style.cssText='margin-bottom:1rem;font-size:.85rem;display:none;grid-column:1/-1;';
     qs('.main .stack').prepend(box);
   }
   if(errors.length){
@@ -2166,7 +2241,7 @@ function saveToStorage(silent=false){
       planStart:state.planStart,
       startBalance:state.startBalance,interestRate:state.interestRate,monthlyRate:state.monthlyRate,
       paymentDay:state.paymentDay,quarterFee:state.quarterFee,years:state.years,
-      calcMode:state.calcMode,specialLimit:state.specialLimit,limitBasis:state.limitBasis,limitYearStart:state.limitYearStart,vfeRate:state.vfeRate,vfeOnlyFixed:state.vfeOnlyFixed,holidays:state.holidays,specialPayments:state.specialPayments,rateChanges:state.rateChanges,statements:state.statements,ratePeriods:state.ratePeriods,
+      calcMode:state.calcMode,specialLimit:state.specialLimit,limitBasis:state.limitBasis,limitYearStart:state.limitYearStart,vfeRate:state.vfeRate,vfeOnlyFixed:state.vfeOnlyFixed,holidays:state.holidays,vfeCap:state.vfeCap,accruedInterest:state.accruedInterest,specialPayments:state.specialPayments,rateChanges:state.rateChanges,statements:state.statements,ratePeriods:state.ratePeriods,
       interestRate2:state.interestRate2,fixedRateUntil:state.fixedRateUntil
     }};
     localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));
@@ -2203,28 +2278,7 @@ function loadFromStorage(){
     const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return false;
     const parsed=JSON.parse(raw); if(!parsed.state) return false;
     const s=parsed.state;
-    state=Object.assign({},DEFAULT_STATE,{
-      planStart:s.planStart??DEFAULT_STATE.planStart,
-      startBalance:s.startBalance??DEFAULT_STATE.startBalance,
-      interestRate:s.interestRate??DEFAULT_STATE.interestRate,
-      interestRate2:s.interestRate2??DEFAULT_STATE.interestRate2,
-      fixedRateUntil:s.fixedRateUntil??DEFAULT_STATE.fixedRateUntil,
-      monthlyRate:s.monthlyRate??DEFAULT_STATE.monthlyRate,
-      paymentDay:s.paymentDay??DEFAULT_STATE.paymentDay,
-      quarterFee:s.quarterFee??DEFAULT_STATE.quarterFee,
-      years:s.years??DEFAULT_STATE.years,
-      calcMode:s.calcMode??DEFAULT_STATE.calcMode,
-      specialLimit:s.specialLimit??0,
-      limitBasis:s.limitBasis==='contract'?'contract':'calendar',
-      limitYearStart:isValidIsoDate(s.limitYearStart)?s.limitYearStart:'',
-      vfeRate:s.vfeRate??DEFAULT_STATE.vfeRate,
-      vfeOnlyFixed:s.vfeOnlyFixed??true,
-      holidays:s.holidays==='none'?'none':'at',
-      specialPayments:normalizeSpecials(s.specialPayments),
-      rateChanges:normalizeRateChanges(s.rateChanges),
-      ratePeriods:normalizeRatePeriods(s.ratePeriods),
-      statements:normalizeStatements(s.statements)
-    });
+    state=sanitizeState(s);
     const savedAt=parsed.savedAt?new Date(parsed.savedAt):null;
     if(savedAt){
       const ts=dFmt.format(savedAt)+', '+savedAt.toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'});
@@ -2237,24 +2291,24 @@ function loadFromStorage(){
 
 // ── JSON EXPORT/IMPORT ───────────────────────────────────────────────────────
 function exportJson(){
-  const payload={app:'Kreditrechner v4.5 – Allgemeiner Kreditrechner',exportedAt:new Date().toISOString(),
+  const payload={app:'Kreditrechner v4.6 – Allgemeiner Kreditrechner',exportedAt:new Date().toISOString(),
     state:{planStart:state.planStart,startBalance:state.startBalance,interestRate:state.interestRate,monthlyRate:state.monthlyRate,
       paymentDay:state.paymentDay,quarterFee:state.quarterFee,years:state.years,
-      calcMode:state.calcMode,specialLimit:state.specialLimit,limitBasis:state.limitBasis,limitYearStart:state.limitYearStart,vfeRate:state.vfeRate,vfeOnlyFixed:state.vfeOnlyFixed,holidays:state.holidays,specialPayments:state.specialPayments,rateChanges:state.rateChanges,statements:state.statements,ratePeriods:state.ratePeriods,
+      calcMode:state.calcMode,specialLimit:state.specialLimit,limitBasis:state.limitBasis,limitYearStart:state.limitYearStart,vfeRate:state.vfeRate,vfeOnlyFixed:state.vfeOnlyFixed,holidays:state.holidays,vfeCap:state.vfeCap,accruedInterest:state.accruedInterest,specialPayments:state.specialPayments,rateChanges:state.rateChanges,statements:state.statements,ratePeriods:state.ratePeriods,
       interestRate2:state.interestRate2,fixedRateUntil:state.fixedRateUntil}};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='kreditrechner-v4.5-'+new Date().toISOString().slice(0,10)+'.json';
+  a.download='kreditrechner-v4.6-'+new Date().toISOString().slice(0,10)+'.json';
   a.click(); URL.revokeObjectURL(a.href);
   toast('JSON-Export erstellt ✓','ok');
 }
 
 // Übernimmt einen fremden Zustand (Datei oder Link) typsicher
-function applyExternalState(s){
+function sanitizeState(s){
   const num = (v, d) => (v === undefined || v === null || v === '' || isNaN(Number(v))) ? d : Number(v);
   const D = DEFAULT_STATE;
-  state = Object.assign({}, cloneState(D), {
+  return Object.assign({}, cloneState(D), {
     planStart: isValidIsoDate(s.planStart) ? s.planStart : D.planStart,
     startBalance: num(s.startBalance, D.startBalance),
     interestRate: num(s.interestRate, D.interestRate),
@@ -2271,11 +2325,16 @@ function applyExternalState(s){
     vfeRate: num(s.vfeRate, D.vfeRate),
     vfeOnlyFixed: s.vfeOnlyFixed === undefined ? true : !!s.vfeOnlyFixed,
     holidays: s.holidays === 'none' ? 'none' : 'at',
+    vfeCap: !!s.vfeCap,
+    accruedInterest: Math.max(0, num(s.accruedInterest, 0)),
     specialPayments: normalizeSpecials(s.specialPayments),
     rateChanges: normalizeRateChanges(s.rateChanges),
     ratePeriods: normalizeRatePeriods(s.ratePeriods),
     statements: normalizeStatements(s.statements)
   });
+}
+function applyExternalState(s){
+  state = sanitizeState(s);
   wireInputs(); renderSpecials(); renderRateChanges(); renderRatePeriods(); renderStatements(); recompute(); saveToStorage(true);
 }
 
@@ -2283,7 +2342,7 @@ function applyExternalState(s){
 function shareState(){
   return {planStart:state.planStart,startBalance:state.startBalance,interestRate:state.interestRate,interestRate2:state.interestRate2,
     fixedRateUntil:state.fixedRateUntil,monthlyRate:state.monthlyRate,paymentDay:state.paymentDay,quarterFee:state.quarterFee,
-    years:state.years,calcMode:state.calcMode,specialLimit:state.specialLimit,limitBasis:state.limitBasis,limitYearStart:state.limitYearStart,vfeRate:state.vfeRate,vfeOnlyFixed:state.vfeOnlyFixed,holidays:state.holidays,specialPayments:state.specialPayments,
+    years:state.years,calcMode:state.calcMode,specialLimit:state.specialLimit,limitBasis:state.limitBasis,limitYearStart:state.limitYearStart,vfeRate:state.vfeRate,vfeOnlyFixed:state.vfeOnlyFixed,holidays:state.holidays,vfeCap:state.vfeCap,accruedInterest:state.accruedInterest,specialPayments:state.specialPayments,
     rateChanges:state.rateChanges,statements:state.statements,ratePeriods:state.ratePeriods};
 }
 const b64urlEncode = str => btoa(unescape(encodeURIComponent(str))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -2320,7 +2379,6 @@ function importJson(file){
       const parsed=JSON.parse(e.target.result);
       const s=parsed.state; if(!s||typeof s.startBalance==='undefined') throw new Error('Ungültiges Format');
       applyExternalState(s);
-      wireInputs(); renderSpecials(); renderRateChanges(); renderRatePeriods(); renderStatements(); recompute(); saveToStorage(true);
       const el=qs('#importStatus'); el.className='note ok'; el.style.display='';
       el.textContent='✓ Import erfolgreich. Exportiert am: '+(parsed.exportedAt?new Date(parsed.exportedAt).toLocaleString('de-AT'):'unbekannt');
       toast('Einstellungen importiert ✓','ok');
@@ -2354,6 +2412,7 @@ function switchTab(target){
   });
   window.scrollTo(0,0);
   qs('#headerTitle').textContent=TAB_TITLES[target]||target;
+  if(target==='sonder' && _savingsStale) updateSpecialSavings();
 }
 
 function setupNav(){
