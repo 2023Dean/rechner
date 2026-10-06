@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Kreditrechner – Allgemeiner Annuitätenkreditrechner v4.2.2</title>
+  <title>Kreditrechner – Allgemeiner Annuitätenkreditrechner v4.3</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
   <!-- Chart.js 4.4.4 lokal (vendor/), Fallback auf CDN falls die Datei fehlt -->
@@ -255,12 +255,27 @@
     input[type=range]{width:100%;accent-color:var(--color-primary);cursor:pointer;margin:.4rem 0}
     .range-labels{display:flex;justify-content:space-between;font-size:var(--text-xs);color:var(--color-text-muted)}
     @media(max-width:768px){.stichtag-box{grid-template-columns:1fr}.zinssim-grid{grid-template-columns:1fr}}
+    #printReport{display:none}
     @media print{
-      .sidebar,.header,.toolbar,.btn,.icon-btn,#toast,#confirmOverlay{display:none!important}
-      .dashboard{display:block}.main{padding:0;overflow:visible}
-      .tab-panel{display:block!important}
-      html,body{height:auto;overflow:visible}
+      @page{size:A4;margin:14mm 12mm}
+      body > *:not(#printReport){display:none!important}
+      #printReport{display:block;color:#000;background:#fff;font-size:10pt;line-height:1.35}
+      html,body{height:auto;overflow:visible;background:#fff}
     }
+    .pr h1{font-size:16pt;margin:0 0 2pt}
+    .pr h2{font-size:11.5pt;margin:12pt 0 4pt;border-bottom:1px solid #999;padding-bottom:2pt;break-after:avoid}
+    .pr .sub{color:#444;font-size:9pt;margin-bottom:8pt}
+    .pr table{width:100%;border-collapse:collapse;font-size:8.5pt;break-inside:auto}
+    .pr th,.pr td{border-bottom:1px solid #ccc;padding:2.5pt 4pt;text-align:right}
+    .pr th:first-child,.pr td:first-child{text-align:left}
+    .pr th{background:#eee}
+    .pr tr{break-inside:avoid}
+    .pr .kv{display:grid;grid-template-columns:repeat(3,1fr);gap:4pt 14pt}
+    .pr .kv div{display:flex;justify-content:space-between;border-bottom:1px dotted #bbb;padding:1.5pt 0}
+    .pr .kv span:last-child{font-weight:700}
+    .pr .charts{display:grid;grid-template-columns:1fr 1fr;gap:8pt}
+    .pr .charts img{width:100%;border:1px solid #ddd}
+    .pr .foot{margin-top:12pt;font-size:7.5pt;color:#555}
     /* kept for compat */ @media print_DISABLED_OLD{
       .sidebar,.header,.toolbar,.btn,.icon-btn,#toast{display:none!important}
       .dashboard{display:block}
@@ -272,6 +287,7 @@
 </head>
 <body>
 <div id="toast"></div>
+<div id="printReport" class="pr"></div>
 <!-- ── EIGENES CONFIRM-MODAL ── -->
 <div id="confirmOverlay" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
   <div id="confirmBox">
@@ -330,6 +346,9 @@
       <button class="icon-btn" id="themeToggle" aria-label="Darstellung umschalten">
         <svg id="themeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
       </button>
+      <button class="btn" id="printReportBtn" title="Bericht drucken oder als PDF speichern">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Drucken/PDF
+      </button>
       <button class="btn" id="exportCsv">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV
       </button>
@@ -344,7 +363,7 @@
       <section class="hero tab-panel" id="panel-dashboard">
         <article class="card">
           <div class="section-title">
-            <div><span class="tag">v4.2.2 – Allgemeiner Kreditrechner</span><h3>Annuitätenkreditrechner</h3></div>
+            <div><span class="tag">v4.3 – Allgemeiner Kreditrechner</span><h3>Annuitätenkreditrechner</h3></div>
             <span class="accuracy-badge">✓ Banknahe Zinslogik</span>
           </div>
           <p>Quartalsweise Zinsabrechnung (1. bis letzter Quartalstag), konfigurierbarer Zahlungstag mit Wochenendregel, optionale Quartalsgebühr. Sondertilgungen ab Valutadatum zinssenkend. Optionaler Folgezins nach Fixzinsende konfigurierbar.</p>
@@ -486,6 +505,20 @@
           <div id="specialLimitInfo"></div>
           <div id="specialList" class="special-list"></div>
         </article>
+
+        <article class="card stack" id="investCard" style="margin-top:var(--space-6)">
+          <div class="section-title">
+            <div><span class="tag">Entscheidungshilfe</span><h3>Sondertilgung oder Geld anlegen?</h3></div>
+          </div>
+          <p style="margin-top:-.5rem">Vergleicht eine zusätzliche Sondertilgung mit einer Geldanlage zur angegebenen Rendite. Bewertet wird das Vermögen zum bisherigen Kreditende: Bei der Sondertilgung werden die danach nicht mehr fälligen Raten zur selben Rendite angelegt.</p>
+          <div class="form-grid">
+            <div class="field"><label>Betrag (€)</label><input id="invAmount" type="number" step="100" min="0" value="10000"></div>
+            <div class="field"><label>Datum</label><input id="invDate" type="date"></div>
+            <div class="field"><label>Anlagerendite p.a. nach KESt (%)</label><input id="invRate" type="number" step="0.1" min="0" value="2.5"></div>
+          </div>
+          <div id="investResult" class="zinssim-result"></div>
+          <div class="note" style="font-size:var(--text-xs)">Hinweis: In Österreich fallen auf Zinsen/Kursgewinne 27,5 % KESt an – 3,5 % brutto entsprechen ca. 2,54 % netto. Die Zinsersparnis einer Sondertilgung ist dagegen sicher und steuerfrei; eine Anlage trägt Risiko. Liquiditätsreserve nicht vergessen.</div>
+        </article>
       </section>
 
       <!-- TILGUNGSPLAN -->
@@ -619,6 +652,13 @@
                 Einstellungen exportieren (.json)
               </button>
             </div>
+            <div class="toolbar" style="margin-top:.5rem">
+              <button class="btn" id="shareLinkBtn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                Link zum Teilen kopieren
+              </button>
+            </div>
+            <div class="field" style="display:none"><label>Teilen-Link (enthält alle Kreditdaten!)</label><input id="shareLinkOut" readonly></div>
             <div class="field" style="margin-top:.5rem">
               <label>JSON-Datei importieren</label>
               <input type="file" id="importFile" accept=".json" style="padding:.5rem;cursor:pointer">
@@ -632,6 +672,7 @@
               <li>LocalStorage ist gerätespezifisch – für Geräteübergabe immer JSON-Export verwenden.</li>
               <li>Beim Löschen des Browser-Caches gehen lokale Daten verloren.</li>
               <li>Die JSON-Datei enthält keine personenbezogenen Daten außer den Kreditparametern.</li>
+              <li>Der Teilen-Link enthält alle Kreditdaten im Link selbst (nichts wird auf einem Server gespeichert) – nur an Personen weitergeben, die die Daten sehen dürfen.</li>
             </ul>
           </article>
         </div>
@@ -1300,6 +1341,118 @@ function renderSpecials(){
   updateSpecialSavings();
 }
 
+// ── SONDERTILGUNG VS. ANLAGE ─────────────────────────────────────────────────
+function compareInvest(amount, dateStr, r){
+  const base = buildFullPlan();
+  const extra = {date: dateStr, amount, note: '', mode: 'laufzeit'};
+  const withS = buildFullPlan({specialPayments: [...state.specialPayments, extra]});
+  const T = payoffOf(base);
+  if(!T) return null;
+  const pays = rows => { const m = new Map(); rows.filter(x=>x.isQ).forEach(q=>q.bookings.forEach(b=>{ const k=b.date.getTime(); m.set(k,(m.get(k)||0)+b.amount); })); return m; };
+  const pb = pays(base), pw = pays(withS);
+  const d0 = toDate(dateStr);
+  pw.set(d0.getTime(), (pw.get(d0.getTime())||0) - amount); // die Sondertilgung selbst ist der Einsatz, keine laufende Zahlung
+  const keys = [...new Set([...pb.keys(), ...pw.keys()])];
+  const yrs = k => Math.max(0, (T - new Date(k)) / (365*864e5));
+  const wealthS = rr => keys.reduce((s,k)=>s + ((pb.get(k)||0) - (pw.get(k)||0)) * Math.pow(1+rr, yrs(k)), 0);
+  const wealthA = rr => amount * Math.pow(1+rr, yrs(d0.getTime()));
+  let lo = 0, hi = 0.5, breakEven = null;
+  if(wealthS(lo) >= wealthA(lo) && wealthS(hi) <= wealthA(hi)){
+    for(let i=0;i<60;i++){ const mid=(lo+hi)/2; if(wealthS(mid) >= wealthA(mid)) lo=mid; else hi=mid; }
+    breakEven = (lo+hi)/2;
+  }
+  const endWith = payoffOf(withS);
+  return { T, endWith, saving: round2(sumInterest(base) - sumInterest(withS)),
+           wS: round2(wealthS(r)), wA: round2(wealthA(r)), breakEven,
+           months: endWith ? (T.getFullYear()-endWith.getFullYear())*12 + T.getMonth()-endWith.getMonth() : 0 };
+}
+let _invWired = false;
+function updateInvestCompare(){
+  const out = qs('#investResult');
+  if(!out) return;
+  const dEl = qs('#invDate');
+  if(!_invWired){
+    _invWired = true;
+    const t0 = new Date();
+    dEl.value = localDateStr(t0 >= planStartDate() ? t0 : planStartDate());
+    ['#invAmount','#invDate','#invRate'].forEach(s=>qs(s).addEventListener('input', () => { clearTimeout(updateInvestCompare._t); updateInvestCompare._t = setTimeout(updateInvestCompare, 200); }));
+  }
+  const amount = Number(qs('#invAmount').value)||0, r = (Number(qs('#invRate').value)||0)/100;
+  if(!(amount > 0) || !isValidIsoDate(dEl.value) || toDate(dEl.value) < planStartDate()){
+    out.innerHTML = '<div class="zinssim-row"><span>Bitte Betrag > 0 und ein Datum ab Planstart eingeben.</span><span></span></div>'; return;
+  }
+  const res = compareInvest(amount, dEl.value, r);
+  if(!res){ out.innerHTML = '<div class="zinssim-row"><span>Kredit wird mit den aktuellen Eingaben nicht getilgt – kein Vergleich möglich.</span><span></span></div>'; return; }
+  const better = res.wS >= res.wA;
+  const be = res.breakEven === null ? '–' : (res.breakEven*100).toLocaleString('de-AT',{minimumFractionDigits:2, maximumFractionDigits:2}) + ' %';
+  out.innerHTML = `
+    <div class="zinssim-row"><span>Zinsersparnis durch Sondertilgung</span><span>${eur.format(res.saving)}</span></div>
+    <div class="zinssim-row"><span>Kredit fertig</span><span>${res.endWith ? dFmt.format(res.endWith) : '–'} (${res.months} Mon. früher)</span></div>
+    <div class="zinssim-row"><span>Vermögen am ${dFmt.format(res.T)} – Sondertilgung</span><span>${eur.format(res.wS)}</span></div>
+    <div class="zinssim-row"><span>Vermögen am ${dFmt.format(res.T)} – Anlage</span><span>${eur.format(res.wA)}</span></div>
+    <div class="zinssim-row ${better?'ok':'highlight'}"><span>${better ? '✓ Sondertilgung lohnt sich mehr' : '⚠ Anlage bringt rechnerisch mehr'}</span><span>${better?'+':'−'}${eur.format(Math.abs(round2(res.wS-res.wA)))}</span></div>
+    <div class="zinssim-row" style="font-size:var(--text-xs);color:var(--color-text-muted)"><span>Gleichstand bei Anlagerendite (nach Steuer)</span><span>${be}</span></div>`;
+}
+
+// ── DRUCKBERICHT ─────────────────────────────────────────────────────────────
+function buildPrintReport(){
+  const rows = buildPlan();
+  const full = buildFullPlan();
+  const kpi = id => escHtml(qs(id)?.textContent || '–');
+  const tbl = (hdr, data) => `<table><thead><tr>${hdr.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${data.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  const img = c => { try { return c ? `<img src="${c.toBase64Image('image/png', 1)}" alt="">` : ''; } catch(e){ return ''; } };
+  const r2 = state.fixedRateUntil ? `${pct.format(state.interestRate2||state.interestRate)} ab ${dFmt.format(addDays(toDate(state.fixedRateUntil),1))}` : '–';
+  const modeLbl = {daily_360:'taggenau/360', daily_365:'taggenau/365', monthly:'monatlich vereinfacht'}[state.calcMode] || state.calcMode;
+  const rc = resolveRateChanges();
+  const specials = [...state.specialPayments].filter(p=>isValidIsoDate(p.date)).sort((a,b)=>a.date.localeCompare(b.date));
+  const years = [...qs('#jahresBody').querySelectorAll('tr')].map(tr=>[...tr.children].map(td=>escHtml(td.textContent)));
+  const ansch = [...qs('#anschlussBody').querySelectorAll('tr')].map(tr=>[...tr.children].map(td=>escHtml(td.textContent)));
+  const stm = validStatements().map(s=>{ const d=toDate(s.date); const c=calcSaldoAtDate(d, full); return [dFmt.format(d), eur.format(s.balance), eur.format(c), eur.format(round2(s.balance-c)), escHtml(s.note)]; });
+  qs('#printReport').innerHTML = `
+    <h1>Kreditübersicht</h1>
+    <div class="sub">Stand ${dFmt.format(new Date())} · Kreditrechner v4.3 · ${modeLbl}, quartalsweise Zinsabrechnung · alle Werte ohne Gewähr</div>
+    <h2>Eckdaten</h2>
+    <div class="kv">
+      <div><span>Planstart</span><span>${dFmt.format(planStartDate())}</span></div>
+      <div><span>Startsaldo</span><span>${eur.format(state.startBalance)}</span></div>
+      <div><span>Monatsrate</span><span>${eur.format(state.monthlyRate)}</span></div>
+      <div><span>Fixzins</span><span>${pct.format(state.interestRate)}</span></div>
+      <div><span>Fixzins bis</span><span>${state.fixedRateUntil ? dFmt.format(toDate(state.fixedRateUntil)) : '–'}</span></div>
+      <div><span>Folgezins</span><span>${r2}</span></div>
+      <div><span>Zahlungstag</span><span>${state.paymentDay}.</span></div>
+      <div><span>Quartalsgebühr</span><span>${eur.format(state.quarterFee||0)}</span></div>
+      <div><span>Sondertilgungslimit p.a.</span><span>${state.specialLimit ? eur.format(state.specialLimit) : 'unbegrenzt'}</span></div>
+    </div>
+    <h2>Kennzahlen</h2>
+    <div class="kv">
+      <div><span>Restschuld heute</span><span>${kpi('#kpiCurrent')}</span></div>
+      <div><span>Schuldenfrei am</span><span>${kpi('#kpiDebtFree')}</span></div>
+      <div><span>Effektivzins p.a.</span><span>${kpi('#kpiEffzins')}</span></div>
+      <div><span>Restschuld bei Fixzins-Ende</span><span>${kpi('#kpiFixEnd')}</span></div>
+      <div><span>Gesamtzinsen bis Tilgung</span><span>${eur.format(sumInterest(full))}</span></div>
+      <div><span>Zinsersparnis durch Sonder</span><span>${kpi('#kpiSaving')}</span></div>
+    </div>
+    <h2>Verlauf</h2>
+    <div class="charts">${img(balanceChart)}${img(flowChart)}</div>
+    ${specials.length ? `<h2>Sondertilgungen</h2>${tbl(['Datum','Betrag','Status','Wirkung','Kommentar'], specials.map(p=>[dFmt.format(toDate(p.date)), eur.format(Number(p.amount)), isDone(toDate(p.date))?'erfolgt':'geplant', p.mode==='rate'?'Rate senken':'Laufzeit verkürzen', escHtml(p.note)]))}` : ''}
+    ${rc.length ? `<h2>Ratenänderungen</h2>${tbl(['Ab','Neue Rate','Art','Kommentar'], rc.map(c=>[dFmt.format(c.d), eur.format(c.rate), c.auto?'automatisch':'manuell', escHtml(c.note)]))}` : ''}
+    <h2>Jahresübersicht</h2>
+    ${tbl(['Jahr','Anfangssaldo','Regelraten','Sondertilgungen','Zinsen','Gebühren','Tilgung','Endsaldo'], years)}
+    <h2>Anschlussfinanzierung – Folgezins-Szenarien</h2>
+    ${tbl(['Folgezins','Schuldenfrei am','Gesamtzinsen','Gesamtkosten','Mehrkosten'], ansch)}
+    ${stm.length ? `<h2>Abgleich Kontoauszug</h2>${tbl(['Datum','Saldo Bank','Saldo Rechner','Abweichung','Kommentar'], stm)}` : ''}
+    <div class="foot">Berechnung: Zinsen taggenau ab Valutadatum, Kapitalisierung am Quartalsende, Zahlungen am Zahlungstag (Wochenende → Montag). Effektivzins als interner Zinsfuß (XIRR) ohne Sondertilgungen. Die Werte sind eine Planungsrechnung und ersetzen nicht die Abrechnung der Bank.</div>`;
+}
+function printReport(){
+  // Charts müssen sichtbar und gerendert sein, damit sie als Bild in den Bericht kommen
+  switchTab('dashboard');
+  setTimeout(() => {
+    [balanceChart, flowChart].forEach(c => { if(c){ c.resize(); c.update('none'); } });
+    buildPrintReport();
+    window.print();
+  }, 200);
+}
+
 // ── KONTOAUSZUG-ABGLEICH ─────────────────────────────────────────────────────
 function validStatements(){
   return (state.statements||[]).filter(s=>isValidIsoDate(s.date) && Number(s.balance)>=0);
@@ -1462,7 +1615,7 @@ function downloadCsv(lines,name){
 function exportRows(rows,name){
   const now=new Date().toLocaleString('de-AT');
   const meta=[
-    [`Kreditrechner v4.2.2 – Export vom ${now}`],
+    [`Kreditrechner v4.3 – Export vom ${now}`],
     [`Startsaldo:`,csvNum(state.startBalance),`Zinssatz p.a.:`,pct.format(state.interestRate),
      `Monatsrate:`,csvNum(state.monthlyRate),`Planjahre:`,state.years],
     []
@@ -1734,6 +1887,7 @@ function recompute(){
   updateSpecialSavings();
   updateAutoRateChanges();
   updateStatementDiffs();
+  updateInvestCompare();
   updateStichtag(rows);
   qs('#exportCsv').onclick=()=>exportRows(rows,'kreditrechner-export.csv');
   qs('#downloadPlan').onclick=()=>exportRows(rows,'tilgungsplan.csv');
@@ -1807,7 +1961,7 @@ function loadFromStorage(){
 
 // ── JSON EXPORT/IMPORT ───────────────────────────────────────────────────────
 function exportJson(){
-  const payload={app:'Kreditrechner v4.2.2 – Allgemeiner Kreditrechner',exportedAt:new Date().toISOString(),
+  const payload={app:'Kreditrechner v4.3 – Allgemeiner Kreditrechner',exportedAt:new Date().toISOString(),
     state:{planStart:state.planStart,startBalance:state.startBalance,interestRate:state.interestRate,monthlyRate:state.monthlyRate,
       paymentDay:state.paymentDay,quarterFee:state.quarterFee,years:state.years,
       calcMode:state.calcMode,specialLimit:state.specialLimit,specialPayments:state.specialPayments,rateChanges:state.rateChanges,statements:state.statements,
@@ -1815,9 +1969,66 @@ function exportJson(){
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='kreditrechner-v4.2.2-'+new Date().toISOString().slice(0,10)+'.json';
+  a.download='kreditrechner-v4.3-'+new Date().toISOString().slice(0,10)+'.json';
   a.click(); URL.revokeObjectURL(a.href);
   toast('JSON-Export erstellt ✓','ok');
+}
+
+// Übernimmt einen fremden Zustand (Datei oder Link) typsicher
+function applyExternalState(s){
+  const num = (v, d) => (v === undefined || v === null || v === '' || isNaN(Number(v))) ? d : Number(v);
+  const D = DEFAULT_STATE;
+  state = Object.assign({}, cloneState(D), {
+    planStart: isValidIsoDate(s.planStart) ? s.planStart : D.planStart,
+    startBalance: num(s.startBalance, D.startBalance),
+    interestRate: num(s.interestRate, D.interestRate),
+    interestRate2: num(s.interestRate2, D.interestRate2),
+    fixedRateUntil: isValidIsoDate(s.fixedRateUntil) ? s.fixedRateUntil : '',
+    monthlyRate: num(s.monthlyRate, D.monthlyRate),
+    paymentDay: num(s.paymentDay, D.paymentDay),
+    quarterFee: num(s.quarterFee, D.quarterFee),
+    years: num(s.years, D.years),
+    calcMode: ['daily_360','daily_365','monthly'].includes(s.calcMode) ? s.calcMode : D.calcMode,
+    specialLimit: num(s.specialLimit, 0),
+    specialPayments: normalizeSpecials(s.specialPayments),
+    rateChanges: normalizeRateChanges(s.rateChanges),
+    statements: normalizeStatements(s.statements)
+  });
+  wireInputs(); renderSpecials(); renderRateChanges(); renderStatements(); recompute(); saveToStorage(true);
+}
+
+// ── TEILEN PER LINK ──────────────────────────────────────────────────────────
+function shareState(){
+  return {planStart:state.planStart,startBalance:state.startBalance,interestRate:state.interestRate,interestRate2:state.interestRate2,
+    fixedRateUntil:state.fixedRateUntil,monthlyRate:state.monthlyRate,paymentDay:state.paymentDay,quarterFee:state.quarterFee,
+    years:state.years,calcMode:state.calcMode,specialLimit:state.specialLimit,specialPayments:state.specialPayments,
+    rateChanges:state.rateChanges,statements:state.statements};
+}
+const b64urlEncode = str => btoa(unescape(encodeURIComponent(str))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const b64urlDecode = s => decodeURIComponent(escape(atob(s.replace(/-/g,'+').replace(/_/g,'/'))));
+function buildShareLink(){
+  return location.href.split('#')[0] + '#s=' + b64urlEncode(JSON.stringify({v:1, state: shareState()}));
+}
+async function copyShareLink(){
+  const link = buildShareLink();
+  const out = qs('#shareLinkOut');
+  out.value = link; out.closest('.field').style.display = '';
+  try { await navigator.clipboard.writeText(link); toast('Link kopiert ✓','ok'); }
+  catch(e){ out.select(); toast('Link markiert – bitte kopieren (Strg+C)'); }
+}
+async function loadFromShareLink(){
+  const m = location.hash.match(/^#s=([A-Za-z0-9_-]+)$/);
+  if(!m) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  let s;
+  try { s = JSON.parse(b64urlDecode(m[1])).state; if(!s || typeof s !== 'object') throw new Error(); }
+  catch(e){ toast('Link ungültig oder beschädigt','warn'); return; }
+  const ok = await confirmModal('Szenario aus Link laden?',
+    `Der Link enthält ein Szenario (Startsaldo ${eur.format(Number(s.startBalance)||0)}, Rate ${eur.format(Number(s.monthlyRate)||0)}, ${(s.specialPayments||[]).length} Sondertilgung(en)). Deine aktuellen Eingaben in diesem Browser werden ersetzt – vorher ggf. als JSON exportieren.`,
+    'Laden','primary');
+  if(!ok) return;
+  applyExternalState(s);
+  toast('Szenario aus Link geladen ✓','ok');
 }
 
 function importJson(file){
@@ -1826,18 +2037,7 @@ function importJson(file){
     try{
       const parsed=JSON.parse(e.target.result);
       const s=parsed.state; if(!s||typeof s.startBalance==='undefined') throw new Error('Ungültiges Format');
-      state=Object.assign({},DEFAULT_STATE,{
-        planStart:s.planStart??DEFAULT_STATE.planStart,
-        startBalance:s.startBalance,interestRate:s.interestRate??DEFAULT_STATE.interestRate,
-        interestRate2:s.interestRate2??DEFAULT_STATE.interestRate2,
-        fixedRateUntil:s.fixedRateUntil??DEFAULT_STATE.fixedRateUntil,
-        monthlyRate:s.monthlyRate??DEFAULT_STATE.monthlyRate,paymentDay:s.paymentDay??DEFAULT_STATE.paymentDay,
-        quarterFee:s.quarterFee??DEFAULT_STATE.quarterFee,years:s.years??DEFAULT_STATE.years,
-        calcMode:s.calcMode??DEFAULT_STATE.calcMode,specialLimit:s.specialLimit??0,
-        specialPayments:normalizeSpecials(s.specialPayments),
-      rateChanges:normalizeRateChanges(s.rateChanges),
-      statements:normalizeStatements(s.statements)
-      });
+      applyExternalState(s);
       wireInputs(); renderSpecials(); renderRateChanges(); renderStatements(); recompute(); saveToStorage(true);
       const el=qs('#importStatus'); el.className='note ok'; el.style.display='';
       el.textContent='✓ Import erfolgreich. Exportiert am: '+(parsed.exportedAt?new Date(parsed.exportedAt).toLocaleString('de-AT'):'unbekannt');
@@ -2094,6 +2294,9 @@ qs('#addSpecial').addEventListener('click',()=>{
   state.specialPayments.push({date:_defDate,amount:0,note:'',mode:'laufzeit'});
   renderSpecials(); scheduleRecompute(); saveToStorage(true);
 });
+qs('#printReportBtn').addEventListener('click', printReport);
+qs('#shareLinkBtn').addEventListener('click', copyShareLink);
+loadFromShareLink();
 qs('#addStatement').addEventListener('click',()=>{
   if(!Array.isArray(state.statements)) state.statements=[];
   const t0 = new Date();

@@ -124,6 +124,15 @@ function run(w){
   check('Abgleich: Saldo am Quartalsende = Quartals-Endsaldo', near(ab.atQ2, ab.q2end, 0.001), `${fmt(ab.atQ2)} / ${fmt(ab.q2end)}`);
   check('Abgleich: Saldo vor Planstart = Startsaldo', near(ab.before, std.startBalance, 0.001));
 
+  // Sondertilgung vs. Anlage: Gleichstand beim Effektivzins, bei 0 % Rendite = Betrag + Zinsersparnis
+  const inv = inState({...std, specialPayments:[]}, () => ({ c0: w.compareInvest(10000, '2026-10-06', 0), eff: w.calcEffektivzins() }));
+  check('Anlage-Vergleich: bei 0 % Rendite Vermögen = Betrag + Zinsersparnis', near(inv.c0.wS, 10000 + inv.c0.saving, 0.02), `${fmt(inv.c0.wS)} = 10.000 + ${fmt(inv.c0.saving)}`);
+  check('Anlage-Vergleich: Gleichstand-Rendite = Effektivzins', inv.c0.breakEven !== null && Math.abs(inv.c0.breakEven - inv.eff) < 0.0005, `${(inv.c0.breakEven*100).toFixed(3)} % vs. ${(inv.eff*100).toFixed(3)} %`);
+
+  // Teilen-Link: Kodierung verlustfrei (inkl. Umlaute/Sonderzeichen)
+  const txt = JSON.stringify({a:'Jänner "ö" <ß> €', b:[1,2.5]});
+  check('Teilen-Link: Kodierung verlustfrei', w.eval('b64urlDecode(b64urlEncode(' + JSON.stringify(txt) + '))') === txt);
+
   // Zielanalyse: übernommene Zusatz-Sondertilgungen erreichen das Ziel
   const zSt = {...std, years: 8};
   const z = inState(zSt, () => {
