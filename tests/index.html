@@ -148,6 +148,18 @@ function run(w){
   check('Rate anpassen: Rate folgt dem Zins (steigt mit steigendem Zins)', va.auto.length===4 && va.auto.every((r,i)=>i===0 || r > va.auto[i-1]), va.auto.map(fmt).join(' → '));
   check('Rate anpassen: Kreditende bleibt (±1 Monat)', Math.abs(months(va.end, baseEnd)) <= 1, `${va.end.toLocaleDateString('de-AT')} vs. ${baseEnd.toLocaleDateString('de-AT')}`);
 
+  // Sondertilgungslimit & Vorfälligkeitsentschädigung (HIKrG-Deckel 1 % / 0,5 %)
+  const limSt = {...std, specialLimit:10000, vfeRate:0.01, vfeOnlyFixed:true, limitBasis:'calendar', limitYearStart:'',
+    specialPayments:[...std.specialPayments, {date:'2029-03-15',amount:15000,note:''}, {date:'2030-03-15',amount:15000,note:''}]};
+  const lim = inState(limSt, () => { const a = w.analyzeLimits(w.buildFullPlan()); return Object.fromEntries(a.years.map(y=>[y.key, [y.total, y.over, y.vfe]])); });
+  check('Limit: 2026 über Limit → 1 % VFE', JSON.stringify(lim.K2026) === JSON.stringify([20000,10000,100]), JSON.stringify(lim.K2026));
+  check('Limit: Rest-Fixzinszeit ≤ 1 Jahr → 0,5 % VFE', JSON.stringify(lim.K2029) === JSON.stringify([15000,5000,25]), JSON.stringify(lim.K2029));
+  check('Limit: variabler Zeitraum → keine VFE', JSON.stringify(lim.K2030) === JSON.stringify([15000,5000,0]), JSON.stringify(lim.K2030));
+  const limC = inState({...limSt, limitBasis:'contract', limitYearStart:'2025-07-01'}, () => w.analyzeLimits(w.buildFullPlan()).years.map(y=>[y.total, y.over]));
+  check('Limit: Vertragsjahr-Zuordnung', JSON.stringify(limC.slice(0,2)) === JSON.stringify([[15000,5000],[10000,0]]), JSON.stringify(limC));
+  const limNone = inState({...limSt, specialLimit:0}, () => w.analyzeLimits(w.buildFullPlan()).vfeTotal);
+  check('Ohne Limit keine VFE', limNone === 0);
+
   // Zielanalyse: übernommene Zusatz-Sondertilgungen erreichen das Ziel
   const zSt = {...std, years: 8};
   const z = inState(zSt, () => {

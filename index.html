@@ -112,6 +112,7 @@
     .rp-item{grid-template-columns:1fr 1fr 1fr auto auto}
     .rp-check{display:flex;gap:.4rem;align-items:center;min-height:44px;font-weight:600;text-transform:none;letter-spacing:0}
     .rp-gen summary{cursor:pointer;font-weight:700;color:var(--color-primary)}
+    .special-limit{font-size:var(--text-xs);font-weight:700;color:var(--color-warning)}
     .special-ratecut{font-size:var(--text-xs);font-weight:700;color:var(--color-primary)}
     .special-saving{font-size:var(--text-xs);color:var(--color-success);font-weight:700;display:flex;align-items:center;gap:.4rem}
     .special-saving svg{width:13px;height:13px}
@@ -444,6 +445,10 @@
               </select>
             </div>
             <div class="field"><label>Sondertilgungslimit p.a. (0 = unbegrenzt)</label><input id="specialLimit" type="number" step="0.01" min="0"></div>
+            <div class="field"><label>Limit gilt je</label><select id="limitBasis"><option value="calendar">Kalenderjahr</option><option value="contract">Vertragsjahr</option></select></div>
+            <div class="field"><label>Vertragsjahr beginnt am <span style="font-weight:400;text-transform:none;color:var(--color-text-faint)">leer = Planstart</span></label><input id="limitYearStart" type="date"></div>
+            <div class="field"><label>Vorfälligkeitsentschädigung (%) <span style="font-weight:400;text-transform:none;color:var(--color-text-faint)">auf Betrag über Limit</span></label><input id="vfeRate" type="number" step="0.05" min="0"></div>
+            <div class="field"><label>VFE nur in Fixzinsperiode</label><label class="rp-check"><input id="vfeOnlyFixed" type="checkbox"> ja (variabel: keine VFE)</label></div>
             <div class="field"><label>Fixzins-Ende <span style="font-weight:400;text-transform:none;color:var(--color-text-faint)">letzter Tag Fixperiode</span></label><input id="fixedRateUntil" type="date"></div>
             <div class="field"><label>Folgezins p.a. (%) <span style="font-weight:400;text-transform:none;color:var(--color-text-faint)">ab Folgetag</span></label><input id="interestRate2" type="number" step="0.01" min="0" inputmode="decimal"></div>
           </div>
@@ -736,7 +741,11 @@ const DEFAULT_STATE = {
   specialPayments:[],
   rateChanges:[],         // [{date, rate, note}] neue Monatsrate ab Datum
   statements:[],          // [{date, balance, note}] Ist-Saldo laut Kontoauszug
-  ratePeriods:[]          // [{date, indicator, margin, adjust, note}] variabler Zins ab Datum (dezimal)
+  ratePeriods:[],         // [{date, indicator, margin, adjust, note}] variabler Zins ab Datum (dezimal)
+  limitBasis:'calendar',  // Sondertilgungslimit je 'calendar' (Kalenderjahr) oder 'contract' (Vertragsjahr)
+  limitYearStart:'',      // Beginn Vertragsjahr (leer = Planstart)
+  vfeRate:0.01,           // Vorfälligkeitsentschädigung auf den Betrag über dem Limit (dezimal)
+  vfeOnlyFixed:true       // VFE nur während der Fixzinsperiode
 };
 
 let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
@@ -1314,25 +1323,78 @@ function renderCharts(rows){
 
 
 // ── SONDERTILGUNGEN ──────────────────────────────────────────────────────────
-function checkLimits(){
-  if(!state.specialLimit || state.specialLimit < 1) return []; // < 1 € = unbegrenzt
-  const byYear={};
-  state.specialPayments.forEach(p=>{
-    const y=p.date?p.date.slice(0,4):'0';
-    byYear[y]=round2((byYear[y]||0)+Number(p.amount||0));
-  });
-  return Object.entries(byYear)
-    .filter(([,t])=>t>state.specialLimit)
-    .map(([year,total])=>({year,total,over:round2(total-state.specialLimit)}));
+// ── SONDERTILGUNGSLIMIT & VORFÄLLIGKEITSENTSCHÄDIGUNG ────────────────────────
+const hasLimit = () => Number(state.specialLimit) >= 1; // < 1 € = unbegrenzt
+function limitYearStartDate(){ return isValidIsoDate(state.limitYearStart) ? toDate(state.limitYearStart) : planStartDate(); }
+// Limitjahr eines Datums: {key, from, to, label}
+function limitPeriodOf(d){
+  if(state.limitBasis === 'contract'){
+    const s = limitYearStartDate();
+    let n = (d.getFullYear()-s.getFullYear())*12 + d.getMonth()-s.getMonth();
+    if(d.getDate() < s.getDate()) n--;
+    const k = Math.floor(n/12);
+    const from = new Date(s.getFullYear(), s.getMonth()+k*12, s.getDate());
+    const to = addDays(new Date(s.getFullYear(), s.getMonth()+(k+1)*12, s.getDate()), -1);
+    return {key:'V'+k, from, to, label:`Vertragsjahr ${dFmt.format(from)}–${dFmt.format(to)}`};
+  }
+  return {key:'K'+d.getFullYear(), from:new Date(d.getFullYear(),0,1), to:new Date(d.getFullYear(),11,31), label:`Jahr ${d.getFullYear()}`};
+}
+// VFE-Satz am Tag d: vertraglicher Satz, gedeckelt (HIKrG) mit 1 % bzw. 0,5 % bei
+// Rest-Fixzinszeit bis 1 Jahr; im variablen Zeitraum optional keine VFE.
+function vfePctAt(d){
+  const rate = Math.max(0, Number(state.vfeRate)||0);
+  const fixEnd = state.fixedRateUntil ? toDate(state.fixedRateUntil) : null;
+  const variable = (fixEnd && d > fixEnd) || validRatePeriods().some(p=>p.d <= d);
+  if(variable) return state.vfeOnlyFixed === false ? Math.min(rate, 0.01) : 0;
+  const cap = fixEnd && (fixEnd - d) <= 365*864e5 ? 0.005 : 0.01;
+  return Math.min(rate, cap);
+}
+// Auswertung der tatsächlich verbuchten Sondertilgungen je Limitjahr
+function analyzeLimits(rows, extra){
+  const bookings = rows.filter(r=>r.isQ).flatMap(r=>r.bookings).filter(b=>b.kind==='special' && b.amount>0)
+    .map(b=>({date:b.date, amount:b.amount}));
+  if(extra) bookings.push(extra);
+  bookings.sort((a,b)=>a.date-b.date || (a===extra ? 1 : 0) - (b===extra ? 1 : 0));
+  const years = new Map(), perDate = new Map();
+  let vfeTotal = 0;
+  for(const b of bookings){
+    const per = limitPeriodOf(b.date);
+    const y = years.get(per.key) || {...per, total:0, over:0, vfe:0};
+    const free = hasLimit() ? Math.max(0, state.specialLimit - y.total) : Infinity;
+    const over = round2(Math.max(0, b.amount - free));
+    const vfe = round2(over * vfePctAt(b.date));
+    y.total = round2(y.total + b.amount); y.over = round2(y.over + over); y.vfe = round2(y.vfe + vfe);
+    years.set(per.key, y);
+    b.over = over; b.vfe = vfe;
+    if(b !== extra){
+      const k = b.date.getTime(), pd = perDate.get(k) || {over:0, vfe:0};
+      pd.over = round2(pd.over + over); pd.vfe = round2(pd.vfe + vfe); perDate.set(k, pd);
+      vfeTotal = round2(vfeTotal + vfe);
+    }
+  }
+  return {years:[...years.values()], perDate, vfeTotal, extra};
 }
 
-function renderLimitWarnings(){
-  const v=checkLimits();
-  const html=v.map(x=>`<div class="note warn" style="margin-bottom:.5rem">⚠ Jahr ${x.year}: Sondertilgungen ${eur.format(x.total)} überschreiten Limit um <strong>${eur.format(x.over)}</strong></div>`).join('');
+function renderLimitWarnings(rows){
+  rows = rows || buildFullPlan();
+  const a = analyzeLimits(rows);
+  const over = a.years.filter(y=>y.over > 0);
+  let html = '';
+  if(hasLimit()){
+    html = over.map(y=>`<div class="note warn" style="margin-bottom:.5rem">⚠ ${y.label}: Sondertilgungen ${eur.format(y.total)} überschreiten das Limit von ${eur.format(state.specialLimit)} um <strong>${eur.format(y.over)}</strong>${y.vfe>0?` → Vorfälligkeitsentschädigung ca. <strong>${eur.format(y.vfe)}</strong>`:' (keine VFE, variabler Zeitraum)'}</div>`).join('');
+    if(!over.length && a.years.length) html = `<div class="note ok" style="margin-bottom:.5rem">✓ Alle Sondertilgungen innerhalb des Limits von ${eur.format(state.specialLimit)} je ${state.limitBasis==='contract'?'Vertragsjahr':'Kalenderjahr'}.</div>`;
+    else if(over.length && a.vfeTotal > 0) html += `<div class="note" style="margin-bottom:.5rem">Vorfälligkeitsentschädigung gesamt ca. <strong>${eur.format(a.vfeTotal)}</strong> (fällt zusätzlich zur Sondertilgung an).</div>`;
+  }
   ['#specialLimitInfo','#limitWarningRechner'].forEach(id=>{
     const el=qs(id); if(!el) return;
     el.innerHTML=html; el.style.display=html?'':'none';
   });
+  qsa('#specialList [data-limit-idx]').forEach(el=>{
+    const p = state.specialPayments[Number(el.dataset.limitIdx)];
+    const pd = p && isValidIsoDate(p.date) ? a.perDate.get(toDate(p.date).getTime()) : null;
+    el.textContent = pd && pd.over > 0 ? `⚠ ${eur.format(pd.over)} über Limit${pd.vfe>0?` · VFE ca. ${eur.format(pd.vfe)}`:''}` : '';
+  });
+  return a;
 }
 
 function calcSavingForSpecial(idx){
@@ -1384,7 +1446,7 @@ function renderSpecials(){
       <button class="btn danger-btn" data-remove="${idx}" style="align-self:end" aria-label="Sondertilgung löschen">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
       </button>
-      <div class="special-meta"><span class="special-status" data-status-idx="${idx}"></span><span class="special-saving" data-saving-idx="${idx}" style="display:none"></span><span class="special-ratecut" data-ratecut-idx="${idx}"></span></div>`;
+      <div class="special-meta"><span class="special-status" data-status-idx="${idx}"></span><span class="special-saving" data-saving-idx="${idx}" style="display:none"></span><span class="special-ratecut" data-ratecut-idx="${idx}"></span><span class="special-limit" data-limit-idx="${idx}"></span></div>`;
     wrap.appendChild(row);
   });
   wrap.querySelectorAll('input,select').forEach(inp=>inp.addEventListener('input',e=>{
@@ -1417,7 +1479,8 @@ function compareInvest(amount, dateStr, r){
   pw.set(d0.getTime(), (pw.get(d0.getTime())||0) - amount); // die Sondertilgung selbst ist der Einsatz, keine laufende Zahlung
   const keys = [...new Set([...pb.keys(), ...pw.keys()])];
   const yrs = k => Math.max(0, (T - new Date(k)) / (365*864e5));
-  const wealthS = rr => keys.reduce((s,k)=>s + ((pb.get(k)||0) - (pw.get(k)||0)) * Math.pow(1+rr, yrs(k)), 0);
+  const vfe = analyzeLimits(base, {date:d0, amount}).extra.vfe || 0; // VFE wird zusätzlich bezahlt
+  const wealthS = rr => keys.reduce((s,k)=>s + ((pb.get(k)||0) - (pw.get(k)||0)) * Math.pow(1+rr, yrs(k)), 0) - vfe * Math.pow(1+rr, yrs(d0.getTime()));
   const wealthA = rr => amount * Math.pow(1+rr, yrs(d0.getTime()));
   let lo = 0, hi = 0.5, breakEven = null;
   if(wealthS(lo) >= wealthA(lo) && wealthS(hi) <= wealthA(hi)){
@@ -1425,7 +1488,7 @@ function compareInvest(amount, dateStr, r){
     breakEven = (lo+hi)/2;
   }
   const endWith = payoffOf(withS);
-  return { T, endWith, saving: round2(sumInterest(base) - sumInterest(withS)),
+  return { T, endWith, vfe, saving: round2(sumInterest(base) - sumInterest(withS)),
            wS: round2(wealthS(r)), wA: round2(wealthA(r)), breakEven,
            months: endWith ? (T.getFullYear()-endWith.getFullYear())*12 + T.getMonth()-endWith.getMonth() : 0 };
 }
@@ -1450,6 +1513,7 @@ function updateInvestCompare(){
   const be = res.breakEven === null ? '–' : (res.breakEven*100).toLocaleString('de-AT',{minimumFractionDigits:2, maximumFractionDigits:2}) + ' %';
   out.innerHTML = `
     <div class="zinssim-row"><span>Zinsersparnis durch Sondertilgung</span><span>${eur.format(res.saving)}</span></div>
+    ${res.vfe > 0 ? `<div class="zinssim-row highlight"><span>Vorfälligkeitsentschädigung (über Limit)</span><span>−${eur.format(res.vfe)}</span></div>` : ''}
     <div class="zinssim-row"><span>Kredit fertig</span><span>${res.endWith ? dFmt.format(res.endWith) : '–'} (${res.months} Mon. früher)</span></div>
     <div class="zinssim-row"><span>Vermögen am ${dFmt.format(res.T)} – Sondertilgung</span><span>${eur.format(res.wS)}</span></div>
     <div class="zinssim-row"><span>Vermögen am ${dFmt.format(res.T)} – Anlage</span><span>${eur.format(res.wA)}</span></div>
@@ -1498,6 +1562,7 @@ function buildPrintReport(){
     <h2>Verlauf</h2>
     <div class="charts">${img(balanceChart)}${img(flowChart)}</div>
     ${specials.length ? `<h2>Sondertilgungen</h2>${tbl(['Datum','Betrag','Status','Wirkung','Kommentar'], specials.map(p=>[dFmt.format(toDate(p.date)), eur.format(Number(p.amount)), isDone(toDate(p.date))?'erfolgt':'geplant', p.mode==='rate'?'Rate senken':'Laufzeit verkürzen', escHtml(p.note)]))}` : ''}
+    ${hasLimit() ? `<h2>Sondertilgungslimit</h2>${tbl(['Zeitraum','Sondertilgungen','Limit','über Limit','VFE ca.'], analyzeLimits(full).years.map(y=>[escHtml(y.label), eur.format(y.total), eur.format(state.specialLimit), eur.format(y.over), eur.format(y.vfe)]))}` : ''}
     ${validRatePeriods().length ? `<h2>Zinsperioden (variabler Zins)</h2>${tbl(['Ab','Indikator','Aufschlag','Sollzins','Rate'], validRatePeriods().map(p=>[dFmt.format(p.d), pct.format(Math.max(0,p.indicator)), pct.format(p.margin), pct.format(periodRate(p)), p.adjust?'wird angepasst':'bleibt']))}` : ''}
     ${rc.length ? `<h2>Ratenänderungen</h2>${tbl(['Ab','Neue Rate','Art','Kommentar'], rc.map(c=>[dFmt.format(c.d), eur.format(c.rate), c.auto?'automatisch':'manuell', escHtml(c.note)]))}` : ''}
     <h2>Jahresübersicht</h2>
@@ -1707,8 +1772,8 @@ function updateAutoRateChanges(){
 
 // ── INPUTS VERDRAHTEN ────────────────────────────────────────────────────────
 const NUM_FIELDS={startBalance:'startBalance',interestRate:'interestRate',monthlyRate:'monthlyRate',
-  paymentDay:'paymentDay',quarterFee:'quarterFee',years:'years',specialLimit:'specialLimit',interestRate2:'interestRate2'};
-const PCT_FIELDS=new Set(['interestRate','interestRate2']); // Eingabe in %, intern dezimal
+  paymentDay:'paymentDay',quarterFee:'quarterFee',years:'years',specialLimit:'specialLimit',interestRate2:'interestRate2',vfeRate:'vfeRate'};
+const PCT_FIELDS=new Set(['interestRate','interestRate2','vfeRate']); // Eingabe in %, intern dezimal
 const round6 = n => Math.round(n*1e6)/1e6;
 let _inputsWired=false;
 function wireInputs(){
@@ -1718,6 +1783,9 @@ function wireInputs(){
   Object.entries(NUM_FIELDS).forEach(([id,key])=>{ const el=qs('#'+id); if(el) el.value=PCT_FIELDS.has(key) ? +(state[key]*100).toFixed(4) : state[key]; });
   elMode.value=state.calcMode;
   elFix.value=state.fixedRateUntil||'';
+  qs('#limitBasis').value=state.limitBasis||'calendar';
+  qs('#limitYearStart').value=state.limitYearStart||'';
+  qs('#vfeOnlyFixed').checked=state.vfeOnlyFixed!==false;
   if(_inputsWired) return;
   _inputsWired=true;
   elPS.addEventListener('input',()=>{ state.planStart=elPS.value||'2026-01-01'; scheduleRecompute(); saveToStorage(true); });
@@ -1731,6 +1799,9 @@ function wireInputs(){
   });
   elMode.addEventListener('input',()=>{ state.calcMode=elMode.value; scheduleRecompute(); saveToStorage(true); });
   elFix.addEventListener('input',()=>{ state.fixedRateUntil=elFix.value||''; scheduleRecompute(); saveToStorage(true); });
+  qs('#limitBasis').addEventListener('input',e=>{ state.limitBasis=e.target.value; scheduleRecompute(); saveToStorage(true); });
+  qs('#limitYearStart').addEventListener('input',e=>{ state.limitYearStart=e.target.value||''; scheduleRecompute(); saveToStorage(true); });
+  qs('#vfeOnlyFixed').addEventListener('input',e=>{ state.vfeOnlyFixed=e.target.checked; scheduleRecompute(); saveToStorage(true); });
 }
 
 // ── EXPORT ───────────────────────────────────────────────────────────────────
@@ -1837,8 +1908,13 @@ function renderZielSzenarien(){
   const grid = qs('#szenarienGrid');
   grid.innerHTML = '';
 
+  const baseVfe = hasLimit() ? analyzeLimits(buildFullPlan()).vfeTotal : 0;
   scenarios.forEach(years => {
     const result = calcRequiredAnnualSpecial(years);
+    if(result.found && !result.alreadyReached && hasLimit()){
+      const rowsX = buildFullPlan({specialPayments: [...state.specialPayments, ...zielExtraPayments(result.annualAmount, years)]});
+      result.vfe = round2(analyzeLimits(rowsX).vfeTotal - baseVfe);
+    }
     const isTarget = years === targetYears;
     const isFaster = years < targetYears;
     const card = document.createElement('div');
@@ -1870,6 +1946,7 @@ function renderZielSzenarien(){
           ? `<div class="szenario-row highlight"><span>Zusatz-Sonder/Jahr</span><span style="color:var(--color-success)">Nicht nötig ✓</span></div>`
           : `<div class="szenario-row highlight"><span>Zusatz-Sonder/Jahr</span><span>${eur.format(result.annualAmount)} × ${result.count}</span></div>`
         }
+        ${result.vfe > 0 ? `<div class="szenario-row extra"><span>davon VFE (über Limit)</span><span>ca. ${eur.format(result.vfe)}</span></div>` : ''}
         <div class="szenario-row saving"><span>Zinssparnis</span><span>${result.zinsSaving > 0 ? '−' + eur.format(result.zinsSaving) : '–'}</span></div>
         <div class="szenario-row"><span>Gesamtzinsen</span><span>${eur.format(result.totalInterest)}</span></div>
       </div>
@@ -1962,6 +2039,8 @@ function validateInputs(){
     if(!isValidIsoDate(c.date)) errors.push(`Kontoauszug ${i+1}: ungültiges oder fehlendes Datum.`);
     if(Number(c.balance)<0) errors.push(`Kontoauszug ${i+1}: Saldo bitte als positiven Betrag eingeben.`);
   });
+  if(state.limitYearStart && !isValidIsoDate(state.limitYearStart)) errors.push('Beginn Vertragsjahr ist kein gültiges Datum.');
+  if(Number(state.vfeRate) < 0 || Number(state.vfeRate) > 0.05) errors.push('Vorfälligkeitsentschädigung muss zwischen 0 % und 5 % liegen.');
   (state.ratePeriods||[]).forEach((c,i)=>{
     if(!isValidIsoDate(c.date)) errors.push(`Zinsperiode ${i+1}: ungültiges oder fehlendes Datum.`);
     const r = periodRate(c);
@@ -2014,7 +2093,7 @@ function recompute(){
   updateInputSummaryCards();
   renderPlan(rows);
   renderCharts(rows);
-  renderLimitWarnings();
+  renderLimitWarnings(buildFullPlan());
   renderZielSzenarien();
   renderJahresplan(rows);
   renderZinssimulator();
@@ -2037,7 +2116,7 @@ function saveToStorage(silent=false){
       planStart:state.planStart,
       startBalance:state.startBalance,interestRate:state.interestRate,monthlyRate:state.monthlyRate,
       paymentDay:state.paymentDay,quarterFee:state.quarterFee,years:state.years,
-      calcMode:state.calcMode,specialLimit:state.specialLimit,specialPayments:state.specialPayments,rateChanges:state.rateChanges,statements:state.statements,ratePeriods:state.ratePeriods,
+      calcMode:state.calcMode,specialLimit:state.specialLimit,limitBasis:state.limitBasis,limitYearStart:state.limitYearStart,vfeRate:state.vfeRate,vfeOnlyFixed:state.vfeOnlyFixed,specialPayments:state.specialPayments,rateChanges:state.rateChanges,statements:state.statements,ratePeriods:state.ratePeriods,
       interestRate2:state.interestRate2,fixedRateUntil:state.fixedRateUntil
     }};
     localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));
@@ -2086,6 +2165,10 @@ function loadFromStorage(){
       years:s.years??DEFAULT_STATE.years,
       calcMode:s.calcMode??DEFAULT_STATE.calcMode,
       specialLimit:s.specialLimit??0,
+      limitBasis:s.limitBasis==='contract'?'contract':'calendar',
+      limitYearStart:isValidIsoDate(s.limitYearStart)?s.limitYearStart:'',
+      vfeRate:s.vfeRate??DEFAULT_STATE.vfeRate,
+      vfeOnlyFixed:s.vfeOnlyFixed??true,
       specialPayments:normalizeSpecials(s.specialPayments),
       rateChanges:normalizeRateChanges(s.rateChanges),
       ratePeriods:normalizeRatePeriods(s.ratePeriods),
@@ -2106,7 +2189,7 @@ function exportJson(){
   const payload={app:'Kreditrechner v4.3 – Allgemeiner Kreditrechner',exportedAt:new Date().toISOString(),
     state:{planStart:state.planStart,startBalance:state.startBalance,interestRate:state.interestRate,monthlyRate:state.monthlyRate,
       paymentDay:state.paymentDay,quarterFee:state.quarterFee,years:state.years,
-      calcMode:state.calcMode,specialLimit:state.specialLimit,specialPayments:state.specialPayments,rateChanges:state.rateChanges,statements:state.statements,ratePeriods:state.ratePeriods,
+      calcMode:state.calcMode,specialLimit:state.specialLimit,limitBasis:state.limitBasis,limitYearStart:state.limitYearStart,vfeRate:state.vfeRate,vfeOnlyFixed:state.vfeOnlyFixed,specialPayments:state.specialPayments,rateChanges:state.rateChanges,statements:state.statements,ratePeriods:state.ratePeriods,
       interestRate2:state.interestRate2,fixedRateUntil:state.fixedRateUntil}};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const a=document.createElement('a');
@@ -2132,6 +2215,10 @@ function applyExternalState(s){
     years: num(s.years, D.years),
     calcMode: ['daily_360','daily_365','monthly'].includes(s.calcMode) ? s.calcMode : D.calcMode,
     specialLimit: num(s.specialLimit, 0),
+    limitBasis: s.limitBasis==='contract' ? 'contract' : 'calendar',
+    limitYearStart: isValidIsoDate(s.limitYearStart) ? s.limitYearStart : '',
+    vfeRate: num(s.vfeRate, D.vfeRate),
+    vfeOnlyFixed: s.vfeOnlyFixed === undefined ? true : !!s.vfeOnlyFixed,
     specialPayments: normalizeSpecials(s.specialPayments),
     rateChanges: normalizeRateChanges(s.rateChanges),
     ratePeriods: normalizeRatePeriods(s.ratePeriods),
@@ -2144,7 +2231,7 @@ function applyExternalState(s){
 function shareState(){
   return {planStart:state.planStart,startBalance:state.startBalance,interestRate:state.interestRate,interestRate2:state.interestRate2,
     fixedRateUntil:state.fixedRateUntil,monthlyRate:state.monthlyRate,paymentDay:state.paymentDay,quarterFee:state.quarterFee,
-    years:state.years,calcMode:state.calcMode,specialLimit:state.specialLimit,specialPayments:state.specialPayments,
+    years:state.years,calcMode:state.calcMode,specialLimit:state.specialLimit,limitBasis:state.limitBasis,limitYearStart:state.limitYearStart,vfeRate:state.vfeRate,vfeOnlyFixed:state.vfeOnlyFixed,specialPayments:state.specialPayments,
     rateChanges:state.rateChanges,statements:state.statements,ratePeriods:state.ratePeriods};
 }
 const b64urlEncode = str => btoa(unescape(encodeURIComponent(str))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
