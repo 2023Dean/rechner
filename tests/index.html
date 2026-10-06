@@ -32,7 +32,7 @@
 <script>
 // Referenzszenarien. Die Quartalswerte (EXPECTED) stammen aus v4.2.2 und wurden
 // zuvor gegen eine unabhängige Python-Nachrechnung (act/360, Quartalskapitalisierung) geprüft.
-const BASE = {planStart:'2026-01-01',startBalance:104250,interestRate:0.0375,interestRate2:0.0375,fixedRateUntil:'2029-12-31',
+const BASE = {holidays:'none',planStart:'2026-01-01',startBalance:104250,interestRate:0.0375,interestRate2:0.0375,fixedRateUntil:'2029-12-31',
   monthlyRate:831.05,paymentDay:7,quarterFee:0,years:10,calcMode:'daily_360',specialLimit:0,
   specialPayments:[
     {date:'2026-03-13',amount:5000,note:''},{date:'2026-03-23',amount:5000,note:''},{date:'2026-06-08',amount:5000,note:''},
@@ -159,6 +159,19 @@ function run(w){
   check('Limit: Vertragsjahr-Zuordnung', JSON.stringify(limC.slice(0,2)) === JSON.stringify([[15000,5000],[10000,0]]), JSON.stringify(limC));
   const limNone = inState({...limSt, specialLimit:0}, () => w.analyzeLimits(w.buildFullPlan()).vfeTotal);
   check('Ohne Limit keine VFE', limNone === 0);
+
+  // Feiertage (Österreich)
+  const hol = inState({...std, holidays:'at'}, () => ({
+    easter: [2024,2025,2026,2027,2030].map(y=>w.easterSunday(y).toLocaleDateString('de-AT')),
+    pays: [[2026,0,6],[2026,11,8],[2026,4,14],[2027,2,29],[2026,11,24],[2026,10,1]].map(([y,m,d])=>w.nextBusinessDay(y,m,d).toLocaleDateString('de-AT')),
+    rows: w.buildPlan().length, ident: (()=>{ const r=w.buildPlan(); return r.reduce((s,x)=>s+x.interest+x.fee-x.rates-x.special,0)+104250-r.filter(x=>x.isQ).pop().end; })()
+  }));
+  check('Osterdatum korrekt (2024–2027, 2030)', JSON.stringify(hol.easter) === JSON.stringify(['31.3.2024','20.4.2025','5.4.2026','28.3.2027','21.4.2030']), hol.easter.join(', '));
+  check('Zahlungstag auf Feiertag → nächster Bankarbeitstag', JSON.stringify(hol.pays) === JSON.stringify(['7.1.2026','9.12.2026','15.5.2026','30.3.2027','28.12.2026','2.11.2026']),
+    'Hl. 3 Könige, Mariä Empf., Christi Himmelf., Ostermontag, Heiligabend+Feiertage, Allerheiligen: ' + hol.pays.join(', '));
+  check('Feiertage: Summenidentität bleibt', near(hol.ident, 0, 0.011));
+  const holOff = inState({...std, holidays:'none'}, () => w.nextBusinessDay(2026,11,8).toLocaleDateString('de-AT'));
+  check('Feiertage abschaltbar', holOff === '8.12.2026', holOff);
 
   // Zielanalyse: übernommene Zusatz-Sondertilgungen erreichen das Ziel
   const zSt = {...std, years: 8};

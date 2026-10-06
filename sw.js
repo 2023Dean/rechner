@@ -1,6 +1,6 @@
 // Service Worker: App offline verfügbar machen.
 // Seite: zuerst Netz (Updates sofort), offline aus dem Cache. Übrige Dateien: Cache zuerst.
-const CACHE = 'kreditrechner-v4.4';
+const CACHE = 'kreditrechner-v4.5';
 const CORE = ['./', './index.html', './vendor/chart.umd.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon.svg', './icons/apple-touch-icon.png'];
 
