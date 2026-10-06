@@ -2,8 +2,16 @@
 <html lang="de" data-theme="light">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Kreditrechner – Allgemeiner Annuitätenkreditrechner v4.3</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#01696f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Kredit">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <title>Kreditrechner – Allgemeiner Annuitätenkreditrechner v4.4</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
   <!-- Chart.js 4.4.4 lokal (vendor/), Fallback auf CDN falls die Datei fehlt -->
@@ -150,7 +158,7 @@
         padding:0;
         border-right:none;
         border-top:1px solid rgba(40,37,29,.12);
-        position:sticky;bottom:0;z-index:20;
+        position:sticky;bottom:0;z-index:20;padding-bottom:env(safe-area-inset-bottom);
         overflow:visible;
       }
       .sidebar .brand{display:none}
@@ -367,7 +375,7 @@
       <section class="hero tab-panel" id="panel-dashboard">
         <article class="card">
           <div class="section-title">
-            <div><span class="tag">v4.3 – Allgemeiner Kreditrechner</span><h3>Annuitätenkreditrechner</h3></div>
+            <div><span class="tag">v4.4 – Allgemeiner Kreditrechner</span><h3>Annuitätenkreditrechner</h3></div>
             <span class="accuracy-badge">✓ Banknahe Zinslogik</span>
           </div>
           <p>Quartalsweise Zinsabrechnung (1. bis letzter Quartalstag), konfigurierbarer Zahlungstag mit Wochenendregel, optionale Quartalsgebühr. Sondertilgungen ab Valutadatum zinssenkend. Optionaler Folgezins nach Fixzinsende konfigurierbar.</p>
@@ -690,6 +698,11 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                 Link zum Teilen kopieren
               </button>
+            </div>
+            <div class="note" id="installBox" style="margin-top:.5rem">
+              <strong>Als App installieren:</strong> <span id="installHint">Android/Chrome: Menü ⋮ → „App installieren“ bzw. „Zum Startbildschirm“. iPhone/Safari: Teilen-Symbol → „Zum Home-Bildschirm“.</span>
+              Danach startet der Rechner wie eine App und funktioniert auch offline. Deine Daten bleiben auf diesem Gerät.
+              <div class="toolbar" style="margin-top:.5rem"><button class="btn primary" id="installBtn" hidden>App installieren</button></div>
             </div>
             <div class="field" style="display:none"><label>Teilen-Link (enthält alle Kreditdaten!)</label><input id="shareLinkOut" readonly></div>
             <div class="field" style="margin-top:.5rem">
@@ -1537,7 +1550,7 @@ function buildPrintReport(){
   const stm = validStatements().map(s=>{ const d=toDate(s.date); const c=calcSaldoAtDate(d, full); return [dFmt.format(d), eur.format(s.balance), eur.format(c), eur.format(round2(s.balance-c)), escHtml(s.note)]; });
   qs('#printReport').innerHTML = `
     <h1>Kreditübersicht</h1>
-    <div class="sub">Stand ${dFmt.format(new Date())} · Kreditrechner v4.3 · ${modeLbl}, quartalsweise Zinsabrechnung · alle Werte ohne Gewähr</div>
+    <div class="sub">Stand ${dFmt.format(new Date())} · Kreditrechner v4.4 · ${modeLbl}, quartalsweise Zinsabrechnung · alle Werte ohne Gewähr</div>
     <h2>Eckdaten</h2>
     <div class="kv">
       <div><span>Planstart</span><span>${dFmt.format(planStartDate())}</span></div>
@@ -1816,7 +1829,7 @@ function downloadCsv(lines,name){
 function exportRows(rows,name){
   const now=new Date().toLocaleString('de-AT');
   const meta=[
-    [`Kreditrechner v4.3 – Export vom ${now}`],
+    [`Kreditrechner v4.4 – Export vom ${now}`],
     [`Startsaldo:`,csvNum(state.startBalance),`Zinssatz p.a.:`,pct.format(state.interestRate),
      `Monatsrate:`,csvNum(state.monthlyRate),`Planjahre:`,state.years],
     []
@@ -2186,7 +2199,7 @@ function loadFromStorage(){
 
 // ── JSON EXPORT/IMPORT ───────────────────────────────────────────────────────
 function exportJson(){
-  const payload={app:'Kreditrechner v4.3 – Allgemeiner Kreditrechner',exportedAt:new Date().toISOString(),
+  const payload={app:'Kreditrechner v4.4 – Allgemeiner Kreditrechner',exportedAt:new Date().toISOString(),
     state:{planStart:state.planStart,startBalance:state.startBalance,interestRate:state.interestRate,monthlyRate:state.monthlyRate,
       paymentDay:state.paymentDay,quarterFee:state.quarterFee,years:state.years,
       calcMode:state.calcMode,specialLimit:state.specialLimit,limitBasis:state.limitBasis,limitYearStart:state.limitYearStart,vfeRate:state.vfeRate,vfeOnlyFixed:state.vfeOnlyFixed,specialPayments:state.specialPayments,rateChanges:state.rateChanges,statements:state.statements,ratePeriods:state.ratePeriods,
@@ -2194,7 +2207,7 @@ function exportJson(){
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='kreditrechner-v4.3-'+new Date().toISOString().slice(0,10)+'.json';
+  a.download='kreditrechner-v4.4-'+new Date().toISOString().slice(0,10)+'.json';
   a.click(); URL.revokeObjectURL(a.href);
   toast('JSON-Export erstellt ✓','ok');
 }
@@ -2527,6 +2540,26 @@ qs('#addSpecial').addEventListener('click',()=>{
 });
 qs('#printReportBtn').addEventListener('click', printReport);
 qs('#shareLinkBtn').addEventListener('click', copyShareLink);
+
+// ── APP (PWA): Offline-Cache + Installation ─────────────────────────────────
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+let _installEvt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault(); _installEvt = e;
+  const b = qs('#installBtn'); if(b) b.hidden = false;
+});
+qs('#installBtn').addEventListener('click', async () => {
+  if(!_installEvt) return;
+  _installEvt.prompt();
+  const choice = await _installEvt.userChoice;
+  if(choice.outcome === 'accepted') toast('App wird installiert ✓','ok');
+  _installEvt = null; qs('#installBtn').hidden = true;
+});
+if(window.matchMedia('(display-mode: standalone)').matches || navigator.standalone){
+  const h = qs('#installHint'); if(h) h.textContent = 'Läuft bereits als installierte App ✓';
+}
 loadFromShareLink();
 qs('#addStatement').addEventListener('click',()=>{
   if(!Array.isArray(state.statements)) state.statements=[];

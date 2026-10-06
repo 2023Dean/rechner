@@ -8,5 +8,7 @@ Annuitätenkreditrechner mit quartalsweiser Zinsabrechnung (taggenau/360), Sonde
 - **Rechentests im Browser:** https://2023dean.github.io/rechner/tests/
 - **Rechentests lokal:** `node tests/run-tests.mjs` (benötigt Playwright; `--golden` gibt die aktuellen Referenzwerte aus)
 
+**Als App:** Die Seite ist eine installierbare Web-App (PWA, `manifest.webmanifest`, `sw.js`) und funktioniert nach dem ersten Aufruf offline. Bei Änderungen an mitgelieferten Dateien `CACHE` in `sw.js` hochzählen.
+
 `vendor/chart.umd.js` ist Chart.js 4.4.4 (MIT, siehe `vendor/chart.js-LICENSE.md`), damit der Rechner ohne CDN funktioniert.
 `kreditrechner_co_v4_2_1_FIX_kpi_cards.html` und `kreditrechner_perp_v3_5_1b.html` sind ältere Versionen (Archiv).
