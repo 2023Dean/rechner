@@ -181,7 +181,10 @@
       .header-title p{display:none}
       #saveIndicator{display:none}
       .header-actions{gap:var(--space-2)}
-      .btn:not(.primary){display:none} /* CSV-Button auf Mobile ausblenden */
+      /* Kopfzeile: CSV (auch im Tab Tilgungsplan) ausblenden, Drucken nur als Symbol */
+      .header #exportCsv{display:none}
+      .header .btn-label{display:none}
+      .header #printReportBtn{padding:.6rem;min-width:44px;justify-content:center}
       /* Main */
       .main{padding:var(--space-4);flex:1}
       /* Karten */
@@ -360,8 +363,8 @@
       <button class="icon-btn" id="themeToggle" aria-label="Darstellung umschalten">
         <svg id="themeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
       </button>
-      <button class="btn" id="printReportBtn" title="Bericht drucken oder als PDF speichern">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Drucken/PDF
+      <button class="btn" id="printReportBtn" title="Bericht drucken oder als PDF speichern" aria-label="Drucken oder als PDF speichern">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg><span class="btn-label">Drucken/PDF</span>
       </button>
       <button class="btn" id="exportCsv">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV
