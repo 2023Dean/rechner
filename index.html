@@ -160,9 +160,11 @@
         padding:0;
         border-right:none;
         border-top:1px solid rgba(40,37,29,.12);
-        position:sticky;bottom:0;z-index:20;padding-bottom:env(safe-area-inset-bottom);
-        overflow:visible;
+        /* fest am unteren Bildschirmrand, immer sichtbar */
+        position:fixed;left:0;right:0;bottom:0;top:auto;z-index:20;padding-bottom:env(safe-area-inset-bottom);
+        overflow:visible;box-shadow:0 -2px 10px rgba(24,20,13,.08);
       }
+      #toast{bottom:calc(76px + env(safe-area-inset-bottom));right:1rem;left:1rem;align-items:flex-end}
       .sidebar .brand{display:none}
       .sidebar .nav{
         display:flex;flex-direction:row;gap:0;
@@ -173,7 +175,8 @@
         padding:.6rem .4rem;font-size:.65rem;border-radius:0;
         justify-content:center;align-items:center;
       }
-      .sidebar .nav span{display:block;font-size:.65rem;line-height:1.1;text-align:center}
+      .sidebar .nav span{display:none}
+      .sidebar .nav button::after{content:attr(data-short);display:block;font-size:.68rem;line-height:1.1;text-align:center;white-space:nowrap}
       .sidebar .nav button svg{width:20px;height:20px}
       /* Header */
       .header{position:sticky;top:0;z-index:10;padding:0 var(--space-4)}
@@ -186,7 +189,7 @@
       .header .btn-label{display:none}
       .header #printReportBtn{padding:.6rem;min-width:44px;justify-content:center}
       /* Main */
-      .main{padding:var(--space-4);flex:1}
+      .main{padding:var(--space-4);padding-bottom:calc(var(--space-4) + 72px + env(safe-area-inset-bottom));flex:1}
       /* Karten */
       .card{padding:var(--space-4);border-radius:var(--radius-lg)}
       .stats{grid-template-columns:1fr 1fr;gap:var(--space-3)}
@@ -325,26 +328,26 @@
       <div><h1>Kreditrechner</h1><p>Allgemeiner Kreditrechner</p></div>
     </div>
     <nav class="nav" aria-label="Bereiche">
-      <button class="active" data-tab="dashboard">
+      <button class="active" data-tab="dashboard" data-short="Übersicht">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
         <span>Übersicht</span></button>
-      <button data-tab="rechner">
+      <button data-tab="rechner" data-short="Rechner">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="14" y1="14" x2="16" y2="14"/></svg>
         <span>Rechner</span></button>
-      <button data-tab="sonder">
+      <button data-tab="sonder" data-short="Sonder">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         <span>Sondertilgungen</span></button>
-      <button data-tab="plan">
+      <button data-tab="plan" data-short="Plan">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
         <span>Tilgungsplan</span></button>
       
-      <button data-tab="jahresplan">
+      <button data-tab="jahresplan" data-short="Jahr">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="8.01" y2="14"/><line x1="12" y1="14" x2="12.01" y2="14"/><line x1="16" y1="14" x2="16.01" y2="14"/></svg>
         <span>Jahresplan</span></button>
-      <button data-tab="abgleich">
+      <button data-tab="abgleich" data-short="Auszug">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         <span>Kontoauszug</span></button>
-      <button data-tab="speichern">
+      <button data-tab="speichern" data-short="Daten">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
         <span>Datenverwaltung</span></button>
     </nav>
