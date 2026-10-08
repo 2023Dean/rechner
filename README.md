@@ -2,7 +2,7 @@
 
 <!-- Kreditrechner-Tool zur Berechnung von Kreditkonditionen und KPI-Auswertung -->
 
-Kreditrechner (v4.6) für Annuitäten-Wohnkredite nach österreichischer Bankpraxis: quartalsweise Zinsabrechnung, taggenaue Zinsen, Sondertilgungen, Fix- und variabler Zins. Läuft komplett im Browser, ohne Server und ohne Konto.
+Kreditrechner (v4.7) für Annuitäten-Wohnkredite nach österreichischer Bankpraxis: quartalsweise Zinsabrechnung, taggenaue Zinsen, Sondertilgungen, Fix- und variabler Zins. Läuft komplett im Browser, ohne Server und ohne Konto.
 
 - **Live:** https://2023dean.github.io/rechner/ (GitHub Pages aus `main`, Datei `index.html`)
 - **Rechentests im Browser:** https://2023dean.github.io/rechner/tests/
@@ -67,7 +67,7 @@ Kreditrechner (v4.6) für Annuitäten-Wohnkredite nach österreichischer Bankpra
 - **JSON-Export/-Import** zum Übertragen zwischen Geräten.
 - **Teilen per Link:** Das ganze Szenario steckt im Link, kein Server. Vor dem Ersetzen der eigenen Daten kommt eine Rückfrage.
 - **CSV-Export** von Tilgungsplan und Jahresübersicht (Dezimalkomma für Excel).
-- **Druckansicht / PDF** fürs Bankgespräch: Eckdaten, Kennzahlen, Charts, Tabellen.
+- **Bericht als PDF herunterladen** (direkt, ohne Druckdialog, auch offline) oder **drucken**: Eckdaten, Kennzahlen, Charts und Tabellen, z.B. fürs Bankgespräch.
 - **Installierbare App (PWA):** Startbildschirm am Handy, funktioniert nach dem ersten Aufruf offline.
 - Hell/Dunkel-Modus (wird gespeichert), Handy-Layout, Eingabeprüfung mit verständlichen Meldungen.
 
@@ -78,6 +78,7 @@ Kreditrechner (v4.6) für Annuitäten-Wohnkredite nach österreichischer Bankpra
 ## Technik
 - Alles in einer Datei: `index.html` (HTML, CSS, JavaScript).
 - `vendor/chart.umd.js` ist Chart.js 4.4.4 (MIT, siehe `vendor/chart.js-LICENSE.md`), lokal eingebunden mit CDN als Fallback.
+- `vendor/jspdf.umd.min.js` (jsPDF 4.2.1) und `vendor/jspdf.plugin.autotable.min.js` (jspdf-autotable 5.0.8), beide MIT (Lizenzen in `vendor/`). Sie werden erst beim PDF-Download geladen.
 - PWA: `manifest.webmanifest`, `sw.js`, `icons/`. Bei Änderungen an mitgelieferten Dateien `CACHE` in `sw.js` hochzählen.
 - Tests: `tests/index.html` mit 124 Tests (Referenzszenarien und Rechenregeln, geprüft gegen eine unabhängige Nachrechnung).
 - `kreditrechner_co_v4_2_1_FIX_kpi_cards.html` und `kreditrechner_perp_v3_5_1b.html` sind ältere Versionen (Archiv).

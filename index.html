@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <title>Kreditrechner – Allgemeiner Annuitätenkreditrechner v4.6</title>
+  <title>Kreditrechner – Allgemeiner Annuitätenkreditrechner v4.7</title>
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
   <!-- Chart.js 4.4.4 lokal (vendor/), Fallback auf CDN falls die Datei fehlt -->
@@ -288,6 +288,13 @@
     .range-labels{display:flex;justify-content:space-between;font-size:var(--text-xs);color:var(--color-text-muted)}
     @media(max-width:768px){.stichtag-box{grid-template-columns:1fr}.zinssim-grid{grid-template-columns:1fr}}
     #printReport{display:none}
+    .choice-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:1rem;z-index:1000;opacity:0;pointer-events:none;transition:opacity .15s}
+    .choice-overlay.open{opacity:1;pointer-events:auto}
+    .choice-box{background:var(--color-surface);color:var(--color-text);border-radius:var(--radius-xl);padding:var(--space-6);width:min(380px,100%);box-shadow:var(--shadow-lg);display:grid;gap:.75rem}
+    .choice-box h4{font-size:var(--text-lg);font-weight:800}
+    .choice-box p{font-size:var(--text-sm);color:var(--color-text-muted)}
+    .choice-actions{display:grid;gap:.5rem}
+    .choice-actions .btn{justify-content:center;width:100%}
     @media print{
       @page{size:A4;margin:14mm 12mm}
       body > *:not(#printReport){display:none!important}
@@ -328,6 +335,19 @@
     <div class="toolbar">
       <button class="btn" id="confirmCancel">Abbrechen</button>
       <button class="btn danger-btn" id="confirmOk">Löschen</button>
+    </div>
+  </div>
+</div>
+<div id="reportOverlay" class="choice-overlay" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+  <div class="choice-box">
+    <h4 id="reportTitle">Bericht</h4>
+    <p>Übersicht mit Eckdaten, Kennzahlen, Charts und Tabellen.</p>
+    <div class="choice-actions">
+      <button class="btn primary" id="reportPdf">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Als PDF herunterladen</button>
+      <button class="btn" id="reportPrint">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Drucken</button>
+      <button class="btn" id="reportCancel">Abbrechen</button>
     </div>
   </div>
 </div>
@@ -378,8 +398,8 @@
       <button class="icon-btn" id="themeToggle" aria-label="Darstellung umschalten">
         <svg id="themeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
       </button>
-      <button class="btn" id="printReportBtn" title="Bericht drucken oder als PDF speichern" aria-label="Drucken oder als PDF speichern">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg><span class="btn-label">Drucken/PDF</span>
+      <button class="btn" id="printReportBtn" title="Bericht als PDF herunterladen oder drucken" aria-label="Bericht: PDF oder Drucken">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg><span class="btn-label">PDF/Drucken</span>
       </button>
       <button class="btn" id="exportCsv">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV
@@ -397,7 +417,7 @@
       <section class="hero tab-panel" id="panel-dashboard">
         <article class="card">
           <div class="section-title">
-            <div><span class="tag">v4.6 – Allgemeiner Kreditrechner</span><h3>Annuitätenkreditrechner</h3></div>
+            <div><span class="tag">v4.7 – Allgemeiner Kreditrechner</span><h3>Annuitätenkreditrechner</h3></div>
             <span class="accuracy-badge">✓ Banknahe Zinslogik</span>
           </div>
           <p>Quartalsweise Zinsabrechnung (1. bis letzter Quartalstag), konfigurierbarer Zahlungstag mit Wochenendregel, optionale Quartalsgebühr. Sondertilgungen ab Valutadatum zinssenkend. Optionaler Folgezins nach Fixzinsende konfigurierbar.</p>
@@ -713,6 +733,10 @@
             <div class="section-title"><h3>Geräteübergabe</h3><span class="tag">JSON</span></div>
             <p>Export als JSON → auf anderem Gerät (Handy, Tablet, PC) importieren. Alle Parameter und Sondertilgungen werden übertragen.</p>
             <div class="toolbar" style="margin-top:.5rem">
+              <button class="btn" id="pdfDownloadBtn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Bericht als PDF herunterladen
+              </button>
               <button class="btn primary" id="exportJson">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Einstellungen exportieren (.json)
@@ -1641,70 +1665,168 @@ function updateInvestCompare(){
 }
 
 // ── DRUCKBERICHT ─────────────────────────────────────────────────────────────
-function buildPrintReport(){
-  const rows = buildPlan();
+// Gemeinsames Datenmodell für Druckansicht und PDF-Download
+function reportModel(){
   const full = buildFullPlan();
-  const kpi = id => escHtml(qs(id)?.textContent || '–');
-  const tbl = (hdr, data) => `<table><thead><tr>${hdr.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${data.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-  const img = c => { try { return c ? `<img src="${c.toBase64Image('image/png', 1)}" alt="">` : ''; } catch(e){ return ''; } };
+  const kpi = id => (qs(id)?.textContent || '–').trim();
   const r2 = state.fixedRateUntil ? `${pct.format(state.interestRate2||state.interestRate)} ab ${dFmt.format(addDays(toDate(state.fixedRateUntil),1))}` : '–';
   const modeLbl = {daily_360:'taggenau/360', daily_365:'taggenau/365', monthly:'monatlich vereinfacht'}[state.calcMode] || state.calcMode;
   const rc = resolveRateChanges();
   const specials = [...state.specialPayments].filter(p=>isValidIsoDate(p.date)).sort((a,b)=>a.date.localeCompare(b.date));
-  const years = [...qs('#jahresBody').querySelectorAll('tr')].map(tr=>[...tr.children].map(td=>escHtml(td.textContent)));
-  const ansch = [...qs('#anschlussBody').querySelectorAll('tr')].map(tr=>[...tr.children].map(td=>escHtml(td.textContent)));
-  const stm = validStatements().map(s=>{ const d=toDate(s.date); const c=calcSaldoAtDate(d, full); return [dFmt.format(d), eur.format(s.balance), eur.format(c), eur.format(round2(s.balance-c)), escHtml(s.note)]; });
-  qs('#printReport').innerHTML = `
-    <h1>Kreditübersicht</h1>
-    <div class="sub">Stand ${dFmt.format(new Date())} · Kreditrechner v4.6 · ${modeLbl}, quartalsweise Zinsabrechnung · alle Werte ohne Gewähr</div>
-    <h2>Eckdaten</h2>
-    <div class="kv">
-      <div><span>Planstart</span><span>${dFmt.format(planStartDate())}</span></div>
-      <div><span>Startsaldo</span><span>${eur.format(state.startBalance)}</span></div>
-      <div><span>Monatsrate</span><span>${eur.format(state.monthlyRate)}</span></div>
-      <div><span>Fixzins</span><span>${pct.format(state.interestRate)}</span></div>
-      <div><span>Fixzins bis</span><span>${state.fixedRateUntil ? dFmt.format(toDate(state.fixedRateUntil)) : '–'}</span></div>
-      <div><span>Folgezins</span><span>${r2}</span></div>
-      <div><span>Zahlungstag</span><span>${state.paymentDay}.</span></div>
-      <div><span>Quartalsgebühr</span><span>${eur.format(state.quarterFee||0)}</span></div>
-      <div><span>Sondertilgungslimit</span><span>${hasLimit() ? eur.format(state.specialLimit) + (state.limitBasis==='contract' ? ' je Vertragsjahr' : ' je Kalenderjahr') : 'unbegrenzt'}</span></div>
-      <div><span>Vorfälligkeitsentsch.</span><span>${pct.format(state.vfeRate||0)}${state.vfeCap ? ' (gedeckelt)' : ''}${state.vfeOnlyFixed!==false ? ', nur Fixzins' : ''}</span></div>
-      <div><span>Feiertage</span><span>${state.holidays==='none' ? 'nur Wochenende' : 'Österreich'}</span></div>
-      ${state.accruedInterest ? `<div><span>Zinsvortrag 1. Quartal</span><span>${eur.format(state.accruedInterest)}</span></div>` : ''}
-    </div>
-    <h2>Kennzahlen</h2>
-    <div class="kv">
-      <div><span>Restschuld heute</span><span>${kpi('#kpiCurrent')}</span></div>
-      <div><span>Schuldenfrei am</span><span>${kpi('#kpiDebtFree')}</span></div>
-      <div><span>Effektivzins p.a.</span><span>${kpi('#kpiEffzins')}</span></div>
-      <div><span>Restschuld bei Fixzins-Ende</span><span>${kpi('#kpiFixEnd')}</span></div>
-      <div><span>Gesamtzinsen bis Tilgung</span><span>${eur.format(sumInterest(full))}</span></div>
-      <div><span>Zinsersparnis durch Sonder</span><span>${kpi('#kpiSaving')}</span></div>
-    </div>
-    <h2>Verlauf</h2>
-    <div class="charts">${img(balanceChart)}${img(flowChart)}</div>
-    ${specials.length ? `<h2>Sondertilgungen</h2>${tbl(['Datum','Betrag','Status','Wirkung','Kommentar'], specials.map(p=>[dFmt.format(toDate(p.date)), eur.format(Number(p.amount)), isDone(toDate(p.date))?'erfolgt':'geplant', p.mode==='rate'?'Rate senken':'Laufzeit verkürzen', escHtml(p.note)]))}` : ''}
-    ${hasLimit() ? `<h2>Sondertilgungslimit</h2>${tbl(['Zeitraum','Sondertilgungen','Limit','über Limit','VFE ca.'], analyzeLimits(full).years.map(y=>[escHtml(y.label), eur.format(y.total), eur.format(state.specialLimit), eur.format(y.over), eur.format(y.vfe)]))}` : ''}
-    ${validRatePeriods().length ? `<h2>Zinsperioden (variabler Zins)</h2>${tbl(['Ab','Indikator','Aufschlag','Sollzins','Rate'], validRatePeriods().map(p=>[dFmt.format(p.d), pct.format(Math.max(0,p.indicator)), pct.format(p.margin), pct.format(periodRate(p)), p.adjust?'wird angepasst':'bleibt']))}` : ''}
-    ${rc.length ? `<h2>Ratenänderungen</h2>${tbl(['Ab','Neue Rate','Art','Kommentar'], rc.map(c=>[dFmt.format(c.d), eur.format(c.rate), c.auto?'automatisch':'manuell', escHtml(c.note)]))}` : ''}
-    <h2>Jahresübersicht</h2>
-    ${tbl(['Jahr','Anfangssaldo','Regelraten','Sondertilgungen','Zinsen','Gebühren','Tilgung','Endsaldo'], years)}
-    <h2>Anschlussfinanzierung – Folgezins-Szenarien</h2>
-    ${tbl(['Folgezins','Schuldenfrei am','Gesamtzinsen','Gesamtkosten','Mehrkosten'], ansch)}
-    ${stm.length ? `<h2>Abgleich Kontoauszug</h2>${tbl(['Datum','Saldo Bank','Saldo Rechner','Abweichung','Kommentar'], stm)}` : ''}
-    <div class="foot">Berechnung: Zinsen taggenau ab Valutadatum, Kapitalisierung am Quartalsende, Zahlungen am Zahlungstag (Wochenende/Feiertag → nächster Bankarbeitstag). Effektivzins als interner Zinsfuß (XIRR) ohne Sondertilgungen. Die Werte sind eine Planungsrechnung und ersetzen nicht die Abrechnung der Bank.</div>`;
+  const rowsOf = sel => [...qs(sel).querySelectorAll('tr')].map(tr=>[...tr.children].map(td=>td.textContent.trim()));
+  const sections = [
+    {title:'Eckdaten', kv:[
+      ['Planstart', dFmt.format(planStartDate())], ['Startsaldo', eur.format(state.startBalance)], ['Monatsrate', eur.format(state.monthlyRate)],
+      ['Fixzins', pct.format(state.interestRate)], ['Fixzins bis', state.fixedRateUntil ? dFmt.format(toDate(state.fixedRateUntil)) : '–'], ['Folgezins', r2],
+      ['Zahlungstag', state.paymentDay+'.'], ['Quartalsgebühr', eur.format(state.quarterFee||0)],
+      ['Sondertilgungslimit', hasLimit() ? eur.format(state.specialLimit) + (state.limitBasis==='contract' ? ' je Vertragsjahr' : ' je Kalenderjahr') : 'unbegrenzt'],
+      ['Vorfälligkeitsentsch.', pct.format(state.vfeRate||0) + (state.vfeCap ? ' (gedeckelt)' : '') + (state.vfeOnlyFixed!==false ? ', nur Fixzins' : '')],
+      ['Feiertage', state.holidays==='none' ? 'nur Wochenende' : 'Österreich'],
+      ...(state.accruedInterest ? [['Zinsvortrag 1. Quartal', eur.format(state.accruedInterest)]] : [])
+    ]},
+    {title:'Kennzahlen', kv:[
+      ['Restschuld heute', kpi('#kpiCurrent')], ['Schuldenfrei am', kpi('#kpiDebtFree')], ['Effektivzins p.a.', kpi('#kpiEffzins')],
+      ['Restschuld bei Fixzins-Ende', kpi('#kpiFixEnd')], ['Gesamtzinsen bis Tilgung', eur.format(sumInterest(full))], ['Zinsersparnis durch Sonder', kpi('#kpiSaving')]
+    ]},
+    {title:'Verlauf', charts:true}
+  ];
+  const table = (title, head, body, textCols=[]) => { if(body.length) sections.push({title, head, body, textCols}); };
+  table('Sondertilgungen', ['Datum','Betrag','Status','Wirkung','Kommentar'],
+    specials.map(p=>[dFmt.format(toDate(p.date)), eur.format(Number(p.amount)), isDone(toDate(p.date))?'erfolgt':'geplant', p.mode==='rate'?'Rate senken':'Laufzeit verkürzen', p.note||'']), [2,3,4]);
+  if(hasLimit()) table('Sondertilgungslimit', ['Zeitraum','Sondertilgungen','Limit','über Limit','VFE ca.'],
+    analyzeLimits(full).years.map(y=>[y.label, eur.format(y.total), eur.format(state.specialLimit), eur.format(y.over), eur.format(y.vfe)]));
+  table('Zinsperioden (variabler Zins)', ['Ab','Indikator','Aufschlag','Sollzins','Rate'],
+    validRatePeriods().map(p=>[dFmt.format(p.d), pct.format(Math.max(0,p.indicator)), pct.format(p.margin), pct.format(periodRate(p)), p.adjust?'wird angepasst':'bleibt']), [4]);
+  table('Ratenänderungen', ['Ab','Neue Rate','Art','Kommentar'],
+    rc.map(c=>[dFmt.format(c.d), eur.format(c.rate), c.auto?'automatisch':'manuell', c.note||'']), [2,3]);
+  table('Jahresübersicht', ['Jahr','Anfangssaldo','Regelraten','Sondertilgungen','Zinsen','Gebühren','Tilgung','Endsaldo'], rowsOf('#jahresBody'));
+  table('Anschlussfinanzierung – Folgezins-Szenarien', ['Folgezins','Schuldenfrei am','Gesamtzinsen','Gesamtkosten','Mehrkosten'], rowsOf('#anschlussBody'));
+  table('Abgleich Kontoauszug', ['Datum','Saldo Bank','Saldo Rechner','Abweichung','Kommentar'],
+    validStatements().map(s=>{ const d=toDate(s.date), c=calcSaldoAtDate(d, full); return [dFmt.format(d), eur.format(s.balance), eur.format(c), eur.format(round2(s.balance-c)), s.note||'']; }), [4]);
+  return {
+    title: 'Kreditübersicht',
+    sub: `Stand ${dFmt.format(new Date())} · Kreditrechner v4.7 · ${modeLbl}, quartalsweise Zinsabrechnung · alle Werte ohne Gewähr`,
+    sections,
+    foot: 'Berechnung: Zinsen taggenau ab Valutadatum, Kapitalisierung am Quartalsende, Zahlungen am Zahlungstag (Wochenende/Feiertag → nächster Bankarbeitstag). Effektivzins als interner Zinsfuß (XIRR) ohne Sondertilgungen. Die Werte sind eine Planungsrechnung und ersetzen nicht die Abrechnung der Bank.'
+  };
+}
+
+// Charts für den Bericht frisch in fester Größe zeichnen: ohne Hinweisfelder/Animation,
+// unabhängig von Bildschirmgröße und aktivem Tab; weißer Hintergrund
+function chartImages(){
+  if(!window.Chart) return [];
+  return [balanceChart, flowChart].filter(Boolean).map(c => {
+    const cv = document.createElement('canvas');
+    cv.width = 560; cv.height = 300; cv.style.width = '560px'; cv.style.height = '300px';
+    const o = c.config.options;
+    const tmp = new Chart(cv, {
+      type: c.config.type,
+      data: JSON.parse(JSON.stringify(c.config.data)),
+      plugins: c.config.plugins,
+      options: Object.assign({}, o, {responsive:false, maintainAspectRatio:false, animation:false, devicePixelRatio:3,
+        plugins: Object.assign({}, o.plugins, {tooltip: {enabled:false}})})
+    });
+    const out = document.createElement('canvas');
+    out.width = cv.width; out.height = cv.height;
+    const ctx = out.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,out.width,out.height); ctx.drawImage(cv,0,0);
+    tmp.destroy();
+    return {url: out.toDataURL('image/jpeg', 0.9), w: out.width, h: out.height};
+  });
+}
+async function withReportCharts(fn){
+  return fn(chartImages());
+}
+
+function buildPrintReport(images){
+  const m = reportModel();
+  const tbl = s => `<table><thead><tr>${s.head.map(h=>`<th>${escHtml(h)}</th>`).join('')}</tr></thead><tbody>${s.body.map(r=>`<tr>${r.map(c=>`<td>${escHtml(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  qs('#printReport').innerHTML = `<h1>${m.title}</h1><div class="sub">${escHtml(m.sub)}</div>` + m.sections.map(s =>
+    `<h2>${escHtml(s.title)}</h2>` + (s.kv ? `<div class="kv">${s.kv.map(([k,v])=>`<div><span>${escHtml(k)}</span><span>${escHtml(v)}</span></div>`).join('')}</div>`
+      : s.charts ? `<div class="charts">${images.map(i=>`<img src="${i.url}" alt="">`).join('')}</div>` : tbl(s))
+  ).join('') + `<div class="foot">${escHtml(m.foot)}</div>`;
 }
 function printReport(){
-  // Charts müssen sichtbar und gerendert sein, damit sie als Bild in den Bericht kommen
-  const prevTab = qs('.nav button.active')?.dataset.tab || 'dashboard';
-  switchTab('dashboard');
-  setTimeout(() => {
-    [balanceChart, flowChart].forEach(c => { if(c){ c.resize(); c.update('none'); } });
-    buildPrintReport();
-    window.print();
-    switchTab(prevTab);
-  }, 200);
+  return withReportCharts(images => { buildPrintReport(images); window.print(); });
 }
+
+// ── PDF-DOWNLOAD (jsPDF, lokal in vendor/) ───────────────────────────────────
+function loadScriptOnce(src){
+  return new Promise((resolve, reject) => {
+    if(document.querySelector(`script[data-src="${src}"]`)) return resolve();
+    const s = document.createElement('script');
+    s.src = src; s.dataset.src = src; s.onload = resolve; s.onerror = () => reject(new Error('Laden fehlgeschlagen: '+src));
+    document.head.appendChild(s);
+  });
+}
+async function ensurePdfLib(){
+  if(!window.jspdf) await loadScriptOnce('vendor/jspdf.umd.min.js');
+  if(!window.jspdf?.jsPDF?.API?.autoTable) await loadScriptOnce('vendor/jspdf.plugin.autotable.min.js');
+}
+function buildPdf(images){
+  const { jsPDF } = window.jspdf;
+  const m = reportModel();
+  const doc = new jsPDF({unit:'mm', format:'a4'});
+  const W = 210, H = 297, L = 14, R = 14, CW = W - L - R, teal = [1,105,111];
+  // Standardschrift kennt nur WinAnsi: übrige Zeichen ersetzen
+  const MAP = {'−':'-', '→':'->', '←':'<-', '≤':'<=', '≥':'>=', '✓':'', '⚠':'!', '↘':'', '⚡':'', ' ':' ', ' ':' '};
+  const WINANSI = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+  const txt = s => [...String(s ?? '')].map(ch => { const c = ch.charCodeAt(0); return MAP[ch] ?? ((c < 256 && !(c >= 0x80 && c < 0xa0)) || WINANSI.includes(ch) ? ch : '?'); }).join('').trim();
+  let y = 18;
+  const need = h => { if(y + h > H - 16){ doc.addPage(); y = 18; } };
+  const heading = t => { need(14); doc.setFont('helvetica','bold'); doc.setFontSize(11.5); doc.setTextColor(30); doc.text(txt(t), L, y); doc.setDrawColor(150); doc.line(L, y+1.5, W-R, y+1.5); y += 5; };
+  doc.setFont('helvetica','bold'); doc.setFontSize(17); doc.setTextColor(20); doc.text(m.title, L, y); y += 5.5;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(90);
+  doc.splitTextToSize(txt(m.sub), CW).forEach(l => { doc.text(l, L, y); y += 3.8; });
+  y += 3;
+  for(const s of m.sections){
+    heading(s.title);
+    if(s.kv){
+      const body = [];
+      for(let i=0;i<s.kv.length;i+=2) body.push([txt(s.kv[i][0]), txt(s.kv[i][1]), txt(s.kv[i+1]?.[0]||''), txt(s.kv[i+1]?.[1]||'')]);
+      doc.autoTable({startY:y, body, theme:'plain', margin:{left:L,right:R}, styles:{fontSize:9, cellPadding:1.4, textColor:30},
+        columnStyles:{0:{textColor:90}, 1:{fontStyle:'bold', halign:'right'}, 2:{textColor:90}, 3:{fontStyle:'bold', halign:'right'}}});
+      y = doc.lastAutoTable.finalY + 6;
+    } else if(s.charts){
+      const gap = 4, w = (CW - gap) / 2;
+      const hs = images.map(i => Math.min(80, w * i.h / i.w));
+      need(Math.max(0, ...hs) + 4);
+      images.forEach((img, i) => doc.addImage(img.url, 'JPEG', L + i*(w+gap), y, w, hs[i]));
+      y += Math.max(0, ...hs) + 7;
+    } else {
+      const align = {}; s.head.forEach((_, i) => { align[i] = {halign: (i === 0 || s.textCols.includes(i)) ? 'left' : 'right'}; });
+      doc.autoTable({startY:y, head:[s.head.map(txt)], body:s.body.map(r=>r.map(txt)), theme:'striped', margin:{left:L,right:R},
+        styles:{fontSize:7.8, cellPadding:1.3, overflow:'linebreak'}, headStyles:{fillColor:teal, textColor:255, fontStyle:'bold'},
+        columnStyles:align, didParseCell: d => { if(d.section==='head') d.cell.styles.halign = align[d.column.index].halign; }});
+      y = doc.lastAutoTable.finalY + 7;
+    }
+  }
+  doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(90);
+  const foot = doc.splitTextToSize(txt(m.foot), CW); need(foot.length * 3.4); foot.forEach(l => { doc.text(l, L, y); y += 3.4; });
+  const n = doc.getNumberOfPages();
+  for(let i=1;i<=n;i++){
+    doc.setPage(i); doc.setFontSize(7.5); doc.setTextColor(120);
+    doc.text(`Kreditübersicht · Stand ${dFmt.format(new Date())}`, L, H - 8);
+    doc.text(`Seite ${i} von ${n}`, W - R, H - 8, {align:'right'});
+  }
+  return doc;
+}
+async function downloadPdf(){
+  try {
+    toast('PDF wird erstellt …');
+    await ensurePdfLib();
+    const doc = await withReportCharts(images => buildPdf(images));
+    doc.save(`Kreditbericht_${localDateStr(new Date())}.pdf`);
+    toast('PDF gespeichert (Ordner „Downloads“) ✓','ok');
+  } catch(e){
+    toast('PDF konnte nicht erstellt werden: ' + e.message, 'warn', 5000);
+  }
+}
+// Auswahl beim Bericht-Knopf: PDF herunterladen oder drucken
+function openReportChooser(){
+  qs('#reportOverlay').classList.add('open');
+  qs('#reportPdf').focus();
+}
+function closeReportChooser(){ qs('#reportOverlay').classList.remove('open'); }
 
 // ── KONTOAUSZUG-ABGLEICH ─────────────────────────────────────────────────────
 function validStatements(){
@@ -1955,7 +2077,7 @@ function downloadCsv(lines,name){
 function exportRows(rows,name){
   const now=new Date().toLocaleString('de-AT');
   const meta=[
-    [`Kreditrechner v4.6 – Export vom ${now}`],
+    [`Kreditrechner v4.7 – Export vom ${now}`],
     [`Startsaldo:`,csvNum(state.startBalance),`Zinssatz p.a.:`,pct.format(state.interestRate),
      `Monatsrate:`,csvNum(state.monthlyRate),`Planjahre:`,state.years],
     []
@@ -2311,7 +2433,7 @@ function loadFromStorage(){
 
 // ── JSON EXPORT/IMPORT ───────────────────────────────────────────────────────
 function exportJson(){
-  const payload={app:'Kreditrechner v4.6 – Allgemeiner Kreditrechner',exportedAt:new Date().toISOString(),
+  const payload={app:'Kreditrechner v4.7 – Allgemeiner Kreditrechner',exportedAt:new Date().toISOString(),
     state:{planStart:state.planStart,startBalance:state.startBalance,interestRate:state.interestRate,monthlyRate:state.monthlyRate,
       paymentDay:state.paymentDay,quarterFee:state.quarterFee,years:state.years,
       calcMode:state.calcMode,specialLimit:state.specialLimit,limitBasis:state.limitBasis,limitYearStart:state.limitYearStart,vfeRate:state.vfeRate,vfeOnlyFixed:state.vfeOnlyFixed,holidays:state.holidays,vfeCap:state.vfeCap,accruedInterest:state.accruedInterest,specialPayments:state.specialPayments,rateChanges:state.rateChanges,statements:state.statements,ratePeriods:state.ratePeriods,
@@ -2319,7 +2441,7 @@ function exportJson(){
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='kreditrechner-v4.6-'+new Date().toISOString().slice(0,10)+'.json';
+  a.download='kreditrechner-v4.7-'+new Date().toISOString().slice(0,10)+'.json';
   a.click(); URL.revokeObjectURL(a.href);
   toast('JSON-Export erstellt ✓','ok');
 }
@@ -2656,7 +2778,13 @@ qs('#addSpecial').addEventListener('click',()=>{
   state.specialPayments.push({date:_defDate,amount:0,note:'',mode:'laufzeit'});
   renderSpecials(); scheduleRecompute(); saveToStorage(true);
 });
-qs('#printReportBtn').addEventListener('click', printReport);
+qs('#printReportBtn').addEventListener('click', openReportChooser);
+qs('#reportPdf').addEventListener('click', () => { closeReportChooser(); downloadPdf(); });
+qs('#reportPrint').addEventListener('click', () => { closeReportChooser(); printReport(); });
+qs('#reportCancel').addEventListener('click', closeReportChooser);
+qs('#reportOverlay').addEventListener('click', e => { if(e.target.id === 'reportOverlay') closeReportChooser(); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeReportChooser(); });
+qs('#pdfDownloadBtn').addEventListener('click', downloadPdf);
 qs('#shareLinkBtn').addEventListener('click', copyShareLink);
 
 // ── APP (PWA): Offline-Cache + Installation ─────────────────────────────────
